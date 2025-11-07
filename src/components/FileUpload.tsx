@@ -6,6 +6,8 @@ import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import type { CVData } from "@/pages/Index";
+import { extractText } from "@/lib/cvParser";
+import { mapTextToCVData } from "@/lib/cvMapper";
 
 interface FileUploadProps {
   onFileParsed: (data: CVData, fileName: string) => void;
@@ -20,89 +22,18 @@ export const FileUpload = ({ onFileParsed }: FileUploadProps) => {
     setError("");
 
     try {
-      // Mock parsing - in production, this would call a backend service
-      // For now, returning sample data
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      toast.info(`Parsing ${file.name}...`);
       
-      const mockData: CVData = {
-        candidate: {
-          fullName: "John Smith",
-          title: "Senior Full Stack Developer",
-          location: "London, UK",
-          email: "john.smith@email.com",
-          phone: "+44 20 1234 5678",
-          links: [
-            { label: "LinkedIn", url: "linkedin.com/in/johnsmith" },
-            { label: "GitHub", url: "github.com/johnsmith" }
-          ]
-        },
-        summary: "Experienced full-stack developer with 8+ years building scalable web applications using .NET, React, and Azure. Proven track record of delivering enterprise solutions and leading development teams.",
-        skills: [
-          { category: "Backend", items: [".NET 8", "C#", "ASP.NET Core", "Entity Framework", "SQL Server"] },
-          { category: "Frontend", items: ["React", "TypeScript", "Angular", "Vue.js", "Tailwind CSS"] },
-          { category: "DevOps", items: ["Azure DevOps", "Docker", "Kubernetes", "CI/CD", "Terraform"] }
-        ],
-        experience: [
-          {
-            company: "Tech Solutions Ltd",
-            role: "Senior Full Stack Developer",
-            employmentType: "Full-time",
-            location: "London, UK",
-            startDate: "2020-03",
-            endDate: "Present",
-            highlights: [
-              "Led development of enterprise CRM system serving 50,000+ users",
-              "Improved application performance by 40% through optimization",
-              "Mentored team of 5 junior developers"
-            ],
-            tech: [".NET 8", "React", "Azure", "SQL Server"]
-          },
-          {
-            company: "Digital Innovations",
-            role: "Full Stack Developer",
-            employmentType: "Full-time",
-            location: "London, UK",
-            startDate: "2017-06",
-            endDate: "2020-02",
-            highlights: [
-              "Built RESTful APIs serving 1M+ daily requests",
-              "Implemented microservices architecture",
-              "Reduced deployment time by 60%"
-            ],
-            tech: [".NET Core", "Angular", "Docker", "PostgreSQL"]
-          }
-        ],
-        education: [
-          {
-            degree: "BSc Computer Science",
-            field: "Computer Science",
-            institution: "University of London",
-            startDate: "2013-09",
-            endDate: "2016-06"
-          }
-        ],
-        certifications: [
-          { name: "Azure Solutions Architect", issuer: "Microsoft", date: "2022-08" },
-          { name: "AWS Certified Developer", issuer: "Amazon", date: "2021-05" }
-        ],
-        projects: [
-          {
-            name: "E-commerce Platform",
-            description: "Built scalable e-commerce platform with microservices architecture",
-            tech: [".NET", "React", "Redis", "RabbitMQ"]
-          }
-        ],
-        languages: [
-          { name: "English", level: "Native" },
-          { name: "Spanish", level: "Intermediate" }
-        ],
-        extras: []
-      };
+      // Extract text from PDF or DOCX
+      const text = await extractText(file);
+      
+      // Map extracted text to CV data structure
+      const parsedData = mapTextToCVData(text);
 
       toast.success("CV parsed successfully!");
-      onFileParsed(mockData, file.name);
+      onFileParsed(parsedData, file.name);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to process file";
+      const message = err instanceof Error ? err.message : "Failed to parse CV. Please ensure it's a valid PDF or DOCX file.";
       setError(message);
       toast.error(message);
     } finally {
