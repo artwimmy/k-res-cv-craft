@@ -1,7 +1,10 @@
 import { useState } from "react";
 import { FileUpload } from "@/components/FileUpload";
 import { CVEditor } from "@/components/CVEditor";
-import { FileText } from "lucide-react";
+import { CVList } from "@/components/CVList";
+import { Settings } from "@/components/Settings";
+import { Button } from "@/components/ui/button";
+import { FileText, Settings as SettingsIcon } from "lucide-react";
 
 export type CVData = {
   candidate: {
@@ -55,49 +58,86 @@ export type CVData = {
 };
 
 const Index = () => {
-  const [cvData, setCVData] = useState<CVData | null>(null);
-  const [uploadedFileName, setUploadedFileName] = useState<string>("");
+  const [cvData, setCvData] = useState<CVData | null>(null);
+  const [uploadedFileName, setUploadedFileName] = useState<string>('');
+  const [currentCvId, setCurrentCvId] = useState<string | undefined>();
+  const [view, setView] = useState<'list' | 'upload' | 'settings'>('list');
 
   const handleFileParsed = (data: CVData, fileName: string) => {
-    setCVData(data);
+    setCvData(data);
     setUploadedFileName(fileName);
+    setCurrentCvId(undefined);
   };
 
   const handleBack = () => {
-    setCVData(null);
-    setUploadedFileName("");
+    setCvData(null);
+    setUploadedFileName('');
+    setCurrentCvId(undefined);
+    setView('list');
+  };
+
+  const handleEdit = (id: string, data: CVData, fileName: string) => {
+    setCvData(data);
+    setUploadedFileName(fileName);
+    setCurrentCvId(id);
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-accent/10">
-      {/* Header */}
-      <header className="border-b border-border bg-background/80 backdrop-blur-sm">
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
-              <FileText className="h-6 w-6 text-primary-foreground" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-foreground">K-Resourcing CV Normalizer</h1>
-              <p className="text-sm text-muted-foreground">Transform CVs into professional templates</p>
-            </div>
-          </div>
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+      <div className="container mx-auto px-4 py-8">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+            K Resourcing CV Normalizer
+          </h1>
+          <p className="text-muted-foreground">
+            Transform candidate CVs into professional templates
+          </p>
         </div>
-      </header>
 
-      {/* Main Content */}
-      <main className="container mx-auto px-6 py-8">
-        {!cvData ? (
-          <FileUpload onFileParsed={handleFileParsed} />
-        ) : (
+        {/* Navigation */}
+        {!cvData && (
+          <div className="flex justify-center gap-4 mb-8">
+            <Button
+              variant={view === 'list' ? 'default' : 'outline'}
+              onClick={() => setView('list')}
+            >
+              <FileText className="mr-2 h-4 w-4" />
+              Saved CVs
+            </Button>
+            <Button
+              variant={view === 'upload' ? 'default' : 'outline'}
+              onClick={() => setView('upload')}
+            >
+              Upload New CV
+            </Button>
+            <Button
+              variant={view === 'settings' ? 'default' : 'outline'}
+              onClick={() => setView('settings')}
+            >
+              <SettingsIcon className="mr-2 h-4 w-4" />
+              Settings
+            </Button>
+          </div>
+        )}
+
+        {/* Main Content */}
+        {cvData ? (
           <CVEditor 
-            cvData={cvData} 
-            onUpdate={setCVData} 
+            cvData={cvData}
+            onUpdate={setCvData}
             fileName={uploadedFileName}
             onBack={handleBack}
+            cvId={currentCvId}
           />
+        ) : view === 'upload' ? (
+          <FileUpload onFileParsed={handleFileParsed} />
+        ) : view === 'settings' ? (
+          <Settings />
+        ) : (
+          <CVList onEdit={handleEdit} />
         )}
-      </main>
+      </div>
     </div>
   );
 };

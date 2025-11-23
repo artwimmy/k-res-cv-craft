@@ -6,16 +6,19 @@ import { CVForm } from "@/components/CVForm";
 import { CVPreview } from "@/components/CVPreview";
 import type { CVData } from "@/pages/Index";
 import { toast } from "sonner";
+import { useCVs } from "@/hooks/useCVs";
 
 interface CVEditorProps {
   cvData: CVData;
   onUpdate: (data: CVData) => void;
   fileName: string;
   onBack: () => void;
+  cvId?: string;
 }
 
-export const CVEditor = ({ cvData, onUpdate, fileName, onBack }: CVEditorProps) => {
+export const CVEditor = ({ cvData, onUpdate, fileName, onBack, cvId }: CVEditorProps) => {
   const [activeTab, setActiveTab] = useState<'form' | 'preview'>('form');
+  const { saveCV, isSaving } = useCVs();
 
   const handleExportPDF = () => {
     toast.success("PDF export coming soon!");
@@ -40,8 +43,7 @@ export const CVEditor = ({ cvData, onUpdate, fileName, onBack }: CVEditorProps) 
   };
 
   const handleSave = () => {
-    toast.success("CV saved successfully!");
-    // In production: save to backend storage
+    saveCV({ fileName, cvData, id: cvId });
   };
 
   return (
@@ -64,9 +66,14 @@ export const CVEditor = ({ cvData, onUpdate, fileName, onBack }: CVEditorProps) 
           </div>
 
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={handleSave}>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleSave}
+              disabled={isSaving}
+            >
               <Save className="mr-2 h-4 w-4" />
-              Save Draft
+              {isSaving ? 'Saving...' : 'Save Draft'}
             </Button>
             
             <div className="h-6 w-px bg-border" />
