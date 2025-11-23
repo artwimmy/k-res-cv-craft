@@ -1,12 +1,14 @@
 import { Card } from "@/components/ui/card";
 import { Mail, Phone, MapPin, Linkedin, Github } from "lucide-react";
 import type { CVData } from "@/pages/Index";
+import { useAppSettings } from "@/hooks/useAppSettings";
 
 interface CVPreviewProps {
   cvData: CVData;
 }
 
 export const CVPreview = ({ cvData }: CVPreviewProps) => {
+  const { logoUrl } = useAppSettings();
   const formatDate = (date: string) => {
     if (date.toLowerCase() === 'present') return 'Present';
     const [year, month] = date.split('-');
@@ -16,7 +18,18 @@ export const CVPreview = ({ cvData }: CVPreviewProps) => {
   };
 
   return (
-    <Card className="p-8 bg-background shadow-lg">
+    <Card className="p-8 bg-background shadow-lg relative">
+      {/* Logo in top-right */}
+      {logoUrl && (
+        <div className="absolute top-6 right-6">
+          <img 
+            src={logoUrl} 
+            alt="K Resourcing Logo" 
+            className="h-12 object-contain"
+          />
+        </div>
+      )}
+
       <div className="space-y-6 text-sm">
         {/* Header */}
         <div className="border-b-2 border-primary pb-6">
