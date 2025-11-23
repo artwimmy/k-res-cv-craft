@@ -36,23 +36,26 @@ export const CVPreview = ({ cvData }: CVPreviewProps) => {
           <h1 className="text-3xl font-bold text-foreground mb-2">
             {cvData.candidate.fullName}
           </h1>
-          <p className="text-xl text-primary font-semibold mb-4">
-            {cvData.candidate.title}
-          </p>
           
-          <div className="flex flex-wrap gap-x-6 gap-y-2 text-muted-foreground">
-            <div className="flex items-center gap-2">
-              <MapPin className="h-4 w-4" />
-              <span>{cvData.candidate.location}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Mail className="h-4 w-4" />
-              <span>{cvData.candidate.email}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Phone className="h-4 w-4" />
-              <span>{cvData.candidate.phone}</span>
-            </div>
+          <div className="flex flex-wrap gap-x-6 gap-y-2 text-muted-foreground mt-4">
+            {cvData.candidate.location && (
+              <div className="flex items-center gap-2">
+                <MapPin className="h-4 w-4" />
+                <span>{cvData.candidate.location}</span>
+              </div>
+            )}
+            {cvData.candidate.email && (
+              <div className="flex items-center gap-2">
+                <Mail className="h-4 w-4" />
+                <span>{cvData.candidate.email}</span>
+              </div>
+            )}
+            {cvData.candidate.phone && (
+              <div className="flex items-center gap-2">
+                <Phone className="h-4 w-4" />
+                <span>{cvData.candidate.phone}</span>
+              </div>
+            )}
           </div>
 
           {cvData.candidate.links.length > 0 && (
@@ -113,29 +116,23 @@ export const CVPreview = ({ cvData }: CVPreviewProps) => {
                   <div className="flex justify-between items-start mb-2">
                     <div>
                       <h3 className="font-bold text-foreground">
-                        {exp.role}
+                        {exp.title}
                       </h3>
                       <p className="text-primary font-semibold">
                         {exp.company}
                       </p>
                     </div>
                     <div className="text-right text-muted-foreground">
-                      <p>{formatDate(exp.startDate)} - {formatDate(exp.endDate)}</p>
-                      <p>{exp.location}</p>
+                      {exp.startDate && exp.endDate && (
+                        <p>{exp.startDate} - {exp.endDate}</p>
+                      )}
+                      {exp.location && <p>{exp.location}</p>}
                     </div>
                   </div>
                   
-                  <ul className="space-y-1 ml-4">
-                    {exp.highlights.map((highlight, hIdx) => (
-                      <li key={hIdx} className="text-foreground leading-relaxed">
-                        • {highlight}
-                      </li>
-                    ))}
-                  </ul>
-                  
-                  {exp.tech.length > 0 && (
-                    <p className="mt-2 text-muted-foreground italic">
-                      <span className="font-semibold">Technologies:</span> {exp.tech.join(', ')}
+                  {exp.description && (
+                    <p className="text-foreground leading-relaxed ml-4">
+                      {exp.description}
                     </p>
                   )}
                 </div>
@@ -157,9 +154,9 @@ export const CVPreview = ({ cvData }: CVPreviewProps) => {
                     <h3 className="font-semibold text-foreground">{edu.degree}</h3>
                     <p className="text-foreground">{edu.institution}</p>
                   </div>
-                  <p className="text-muted-foreground">
-                    {formatDate(edu.startDate)} - {formatDate(edu.endDate)}
-                  </p>
+                  {edu.year && (
+                    <p className="text-muted-foreground">{edu.year}</p>
+                  )}
                 </div>
               ))}
             </div>
@@ -167,7 +164,7 @@ export const CVPreview = ({ cvData }: CVPreviewProps) => {
         )}
 
         {/* Certifications */}
-        {cvData.certifications.length > 0 && (
+        {cvData.certifications && cvData.certifications.length > 0 && (
           <div>
             <h2 className="text-lg font-bold text-foreground mb-3 uppercase tracking-wide">
               Certifications
@@ -179,7 +176,7 @@ export const CVPreview = ({ cvData }: CVPreviewProps) => {
                     <span className="font-semibold text-foreground">{cert.name}</span>
                     <span className="text-muted-foreground"> - {cert.issuer}</span>
                   </div>
-                  <span className="text-muted-foreground">{formatDate(cert.date)}</span>
+                  <span className="text-muted-foreground">{cert.date}</span>
                 </div>
               ))}
             </div>
@@ -187,7 +184,7 @@ export const CVPreview = ({ cvData }: CVPreviewProps) => {
         )}
 
         {/* Languages */}
-        {cvData.languages.length > 0 && (
+        {cvData.languages && cvData.languages.length > 0 && (
           <div>
             <h2 className="text-lg font-bold text-foreground mb-3 uppercase tracking-wide">
               Languages

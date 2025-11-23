@@ -90,14 +90,12 @@ function extractExperience(text: string): CVData['experience'] {
     const dates = entry.match(dateRegex) || [];
     
     experiences.push({
+      title: lines[0] || '',
       company: lines[1] || '',
-      role: lines[0] || '',
-      employmentType: 'Full-time',
       location: '',
       startDate: dates[0] || '',
       endDate: dates[1] || 'Present',
-      highlights: lines.slice(2, 5).filter(l => l.length > 10),
-      tech: []
+      description: lines.slice(2, 5).filter(l => l.length > 10).join(' ')
     });
   }
   
@@ -122,10 +120,8 @@ function extractEducation(text: string): CVData['education'] {
     
     education.push({
       degree: lines[0] || '',
-      field: '',
       institution: lines[1] || '',
-      startDate: dates[0] || '',
-      endDate: dates[1] || dates[0] || ''
+      year: dates[0] || ''
     });
   }
   
@@ -190,7 +186,6 @@ export function mapTextToCVData(text: string): CVData {
   return {
     candidate: {
       fullName: name,
-      title: '',
       location: '',
       email,
       phone,
@@ -203,6 +198,10 @@ export function mapTextToCVData(text: string): CVData {
     certifications: [],
     projects: [],
     languages: [],
-    extras: []
+    extras: {
+      interests: [],
+      publications: [],
+      awards: []
+    }
   };
 }
