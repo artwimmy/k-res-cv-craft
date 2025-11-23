@@ -9,10 +9,9 @@ import { FileText, Settings as SettingsIcon } from "lucide-react";
 export type CVData = {
   candidate: {
     fullName: string;
-    title: string;
-    location: string;
     email: string;
     phone: string;
+    location: string;
     links: Array<{ label: string; url: string }>;
   };
   summary: string;
@@ -21,21 +20,17 @@ export type CVData = {
     items: string[];
   }>;
   experience: Array<{
+    title: string;
     company: string;
-    role: string;
-    employmentType: string;
     location: string;
     startDate: string;
     endDate: string;
-    highlights: string[];
-    tech: string[];
+    description: string;
   }>;
   education: Array<{
     degree: string;
-    field: string;
     institution: string;
-    startDate: string;
-    endDate: string;
+    year: string;
   }>;
   certifications: Array<{
     name: string;
@@ -51,10 +46,11 @@ export type CVData = {
     name: string;
     level: string;
   }>;
-  extras: Array<{
-    label: string;
-    value: string;
-  }>;
+  extras: {
+    interests: string[];
+    publications: string[];
+    awards: string[];
+  };
 };
 
 const Index = () => {
