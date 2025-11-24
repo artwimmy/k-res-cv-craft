@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ArrowLeft, Download, Save } from "lucide-react";
@@ -7,6 +7,8 @@ import { CVPreview } from "@/components/CVPreview";
 import type { CVData } from "@/pages/Index";
 import { toast } from "sonner";
 import { useCVs } from "@/hooks/useCVs";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
 
 interface CVEditorProps {
   cvData: CVData;
@@ -19,10 +21,46 @@ interface CVEditorProps {
 export const CVEditor = ({ cvData, onUpdate, fileName, onBack, cvId }: CVEditorProps) => {
   const [activeTab, setActiveTab] = useState<'form' | 'preview'>('form');
   const { saveCV, isSaving } = useCVs();
+  const previewRef = useRef<HTMLDivElement>(null);
 
-  const handleExportPDF = () => {
-    toast.success("PDF export coming soon!");
-    // In production: generate PDF from CVPreview component
+  const handleExportPDF = async () => {
+    if (!previewRef.current) {
+      toast.error("Preview not available");
+      return;
+    }
+
+    try {
+      toast.info("Generating PDF...");
+      
+      const canvas = await html2canvas(previewRef.current, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = canvas.width;
+      const imgHeight = canvas.height;
+      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+      const imgX = (pdfWidth - imgWidth * ratio) / 2;
+      const imgY = 0;
+
+      pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
+      pdf.save(`${fileName.replace(/\.[^/.]+$/, '')}_CV.pdf`);
+      
+      toast.success("PDF exported successfully!");
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast.error("Failed to generate PDF");
+    }
   };
 
   const handleExportDOCX = () => {
@@ -127,7 +165,7 @@ export const CVEditor = ({ cvData, onUpdate, fileName, onBack, cvId }: CVEditorP
 
         {/* Right Pane: Preview */}
         <div className={`${activeTab === 'form' ? 'hidden lg:block' : ''}`}>
-          <div className="sticky top-6">
+          <div className="sticky top-6" ref={previewRef}>
             <CVPreview cvData={cvData} />
           </div>
         </div>
