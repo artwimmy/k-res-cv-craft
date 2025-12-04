@@ -1,12 +1,16 @@
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ArrowLeft, Download, Save } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { ArrowLeft, Download, Save, FileText } from "lucide-react";
 import { CVForm } from "@/components/CVForm";
 import { CVPreview } from "@/components/CVPreview";
 import type { CVData } from "@/pages/Index";
 import { toast } from "sonner";
 import { useCVs } from "@/hooks/useCVs";
+import { useAppSettings } from "@/hooks/useAppSettings";
+import { generateWordDocument } from "@/lib/wordExport";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 
@@ -20,7 +24,10 @@ interface CVEditorProps {
 
 export const CVEditor = ({ cvData, onUpdate, fileName, onBack, cvId }: CVEditorProps) => {
   const [activeTab, setActiveTab] = useState<'form' | 'preview'>('form');
+  const [anonymize, setAnonymize] = useState(false);
+  const [isExportingWord, setIsExportingWord] = useState(false);
   const { saveCV, isSaving } = useCVs();
+  const { logoUrl } = useAppSettings();
   const previewRef = useRef<HTMLDivElement>(null);
 
   const handleExportPDF = async () => {
@@ -63,9 +70,30 @@ export const CVEditor = ({ cvData, onUpdate, fileName, onBack, cvId }: CVEditorP
     }
   };
 
-  const handleExportDOCX = () => {
-    toast.success("DOCX export coming soon!");
-    // In production: generate DOCX using template
+  const handleExportDOCX = async () => {
+    setIsExportingWord(true);
+    try {
+      toast.info("Generating Word document...");
+      
+      const blob = await generateWordDocument(cvData, {
+        anonymize,
+        logoUrl: logoUrl || undefined,
+      });
+      
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${fileName.replace(/\.[^/.]+$/, '')}_CV${anonymize ? '_anon' : ''}.docx`;
+      link.click();
+      URL.revokeObjectURL(url);
+      
+      toast.success("Word document exported successfully!");
+    } catch (error) {
+      console.error('Error generating DOCX:', error);
+      toast.error("Failed to generate Word document");
+    } finally {
+      setIsExportingWord(false);
+    }
   };
 
   const handleExportJSON = () => {
@@ -103,7 +131,7 @@ export const CVEditor = ({ cvData, onUpdate, fileName, onBack, cvId }: CVEditorP
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Button 
               variant="outline" 
               size="sm" 
@@ -115,12 +143,32 @@ export const CVEditor = ({ cvData, onUpdate, fileName, onBack, cvId }: CVEditorP
             </Button>
             
             <div className="h-6 w-px bg-border" />
+
+            {/* Anonymize option */}
+            <div className="flex items-center space-x-2">
+              <Checkbox 
+                id="anonymize" 
+                checked={anonymize}
+                onCheckedChange={(checked) => setAnonymize(checked === true)}
+              />
+              <Label htmlFor="anonymize" className="text-sm cursor-pointer">
+                Anonymize
+              </Label>
+            </div>
+            
+            <div className="h-6 w-px bg-border" />
             
             <Button variant="outline" size="sm" onClick={handleExportJSON}>
               JSON
             </Button>
-            <Button variant="outline" size="sm" onClick={handleExportDOCX}>
-              DOCX
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleExportDOCX}
+              disabled={isExportingWord}
+            >
+              <FileText className="mr-2 h-4 w-4" />
+              {isExportingWord ? 'Generating...' : 'DOCX'}
             </Button>
             <Button size="sm" onClick={handleExportPDF}>
               <Download className="mr-2 h-4 w-4" />
