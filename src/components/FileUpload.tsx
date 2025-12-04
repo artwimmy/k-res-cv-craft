@@ -1,13 +1,13 @@
 import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
-import { FileText, Upload, AlertCircle, Loader2 } from "lucide-react";
+import { FileText, Upload, AlertCircle, Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import type { CVData } from "@/pages/Index";
 import { extractText } from "@/lib/cvParser";
-import { mapTextToCVData } from "@/lib/cvMapper";
+import { supabase } from "@/integrations/supabase/client";
 
 interface FileUploadProps {
   onFileParsed: (data: CVData, fileName: string) => void;
@@ -22,18 +22,39 @@ export const FileUpload = ({ onFileParsed }: FileUploadProps) => {
     setError("");
 
     try {
-      toast.info(`Parsing ${file.name}...`);
+      toast.info(`Extracting text from ${file.name}...`);
       
       // Extract text from PDF or DOCX
       const text = await extractText(file);
       
-      // Map extracted text to CV data structure
-      const parsedData = mapTextToCVData(text);
+      if (!text || text.trim().length < 50) {
+        throw new Error("Could not extract enough text from the document. Please ensure the file is not empty or image-only.");
+      }
 
-      toast.success("CV parsed successfully!");
-      onFileParsed(parsedData, file.name);
+      toast.info("AI is analyzing your CV...");
+      
+      // Use AI to parse the CV
+      const { data, error: fnError } = await supabase.functions.invoke('parse-cv', {
+        body: { text }
+      });
+
+      if (fnError) {
+        console.error('Edge function error:', fnError);
+        throw new Error(fnError.message || 'Failed to process CV with AI');
+      }
+
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+
+      if (!data?.cvData) {
+        throw new Error('No CV data returned from AI');
+      }
+
+      toast.success("CV parsed successfully with AI!");
+      onFileParsed(data.cvData as CVData, file.name);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to parse CV. Please ensure it's a valid PDF or DOCX file.";
+      const message = err instanceof Error ? err.message : "Failed to parse CV. Please try again.";
       setError(message);
       toast.error(message);
     } finally {
@@ -81,14 +102,14 @@ export const FileUpload = ({ onFileParsed }: FileUploadProps) => {
             {isProcessing ? (
               <>
                 <div className="relative">
-                  <div className="h-24 w-24 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Loader2 className="h-12 w-12 text-primary animate-spin" />
+                  <div className="h-24 w-24 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
+                    <Sparkles className="h-12 w-12 text-primary animate-pulse" />
                   </div>
                 </div>
                 <div className="text-center">
-                  <p className="text-lg font-semibold text-foreground mb-2">Processing CV...</p>
+                  <p className="text-lg font-semibold text-foreground mb-2">AI is analyzing your CV...</p>
                   <p className="text-sm text-muted-foreground">
-                    Extracting and normalizing data
+                    Extracting and structuring information intelligently
                   </p>
                 </div>
               </>
@@ -145,13 +166,13 @@ export const FileUpload = ({ onFileParsed }: FileUploadProps) => {
       <div className="mt-8 grid md:grid-cols-3 gap-4">
         <Card className="p-6 bg-card hover:shadow-md transition-shadow">
           <div className="flex items-start gap-3">
-            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-              <FileText className="h-5 w-5 text-primary" />
+            <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center flex-shrink-0">
+              <Sparkles className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <h3 className="font-semibold text-foreground mb-1">Smart Parsing</h3>
+              <h3 className="font-semibold text-foreground mb-1">AI-Powered Parsing</h3>
               <p className="text-sm text-muted-foreground">
-                Automatically extracts and structures CV data
+                Intelligently extracts and categorizes CV data
               </p>
             </div>
           </div>
