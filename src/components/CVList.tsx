@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { FileText, Trash2, Download, Edit, Sparkles, Loader2 } from "lucide-react";
-import { useCVs } from "@/hooks/useCVs";
+import { useCVs, SavedCV } from "@/hooks/useCVs";
 import { useAppSettings } from "@/hooks/useAppSettings";
 import { formatDistanceToNow } from "date-fns";
 import { generateWordDocument } from "@/lib/wordExport";
@@ -15,6 +17,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 
 interface CVListProps {
@@ -28,6 +31,11 @@ export const CVList = ({ onEdit }: CVListProps) => {
   const [profileDescription, setProfileDescription] = useState<string>("");
   const [showProfileDialog, setShowProfileDialog] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  
+  // Download dialog state
+  const [showDownloadDialog, setShowDownloadDialog] = useState(false);
+  const [selectedCV, setSelectedCV] = useState<SavedCV | null>(null);
+  const [anonymizeDownload, setAnonymizeDownload] = useState(false);
 
   const handleGenerateProfile = async (cvData: CVData, cvId: string) => {
     setGeneratingId(cvId);
@@ -53,18 +61,29 @@ export const CVList = ({ onEdit }: CVListProps) => {
     }
   };
 
-  const handleDownload = async (cvData: CVData, fileName: string, cvId: string) => {
-    setDownloadingId(cvId);
+  const openDownloadDialog = (cv: SavedCV) => {
+    setSelectedCV(cv);
+    setAnonymizeDownload(false);
+    setShowDownloadDialog(true);
+  };
+
+  const handleDownload = async () => {
+    if (!selectedCV) return;
+    
+    setDownloadingId(selectedCV.id);
+    setShowDownloadDialog(false);
+    
     try {
-      const blob = await generateWordDocument(cvData, {
-        anonymize: false,
+      const blob = await generateWordDocument(selectedCV.cv_data, {
+        anonymize: anonymizeDownload,
         logoUrl: logoUrl || undefined,
       });
       
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `${fileName.replace(/\.[^/.]+$/, '')}_CV.docx`;
+      const baseName = selectedCV.file_name.replace(/\.[^/.]+$/, '');
+      link.download = `${baseName}_CV${anonymizeDownload ? '_anon' : ''}.docx`;
       link.click();
       URL.revokeObjectURL(url);
       
@@ -74,6 +93,7 @@ export const CVList = ({ onEdit }: CVListProps) => {
       toast.error('Failed to download CV');
     } finally {
       setDownloadingId(null);
+      setSelectedCV(null);
     }
   };
 
@@ -154,7 +174,7 @@ export const CVList = ({ onEdit }: CVListProps) => {
                   <Button 
                     size="sm" 
                     variant="outline"
-                    onClick={() => handleDownload(cv.cv_data, cv.file_name, cv.id)}
+                    onClick={() => openDownloadDialog(cv)}
                     disabled={downloadingId === cv.id}
                   >
                     {downloadingId === cv.id ? (
@@ -177,6 +197,40 @@ export const CVList = ({ onEdit }: CVListProps) => {
         </div>
       </div>
 
+      {/* Download Options Dialog */}
+      <Dialog open={showDownloadDialog} onOpenChange={setShowDownloadDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Download CV</DialogTitle>
+            <DialogDescription>
+              Choose your download options for {selectedCV?.cv_data.candidate.fullName}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="flex items-center space-x-2">
+              <Checkbox 
+                id="anonymize-download" 
+                checked={anonymizeDownload}
+                onCheckedChange={(checked) => setAnonymizeDownload(checked === true)}
+              />
+              <Label htmlFor="anonymize-download" className="cursor-pointer">
+                Anonymize personal data (use initials, mask email & phone)
+              </Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDownloadDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleDownload}>
+              <Download className="h-4 w-4 mr-2" />
+              Download Word
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Profile Description Dialog */}
       <Dialog open={showProfileDialog} onOpenChange={setShowProfileDialog}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
