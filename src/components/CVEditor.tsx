@@ -39,10 +39,15 @@ export const CVEditor = ({ cvData, onUpdate, fileName, onBack, cvId }: CVEditorP
     try {
       toast.info("Generating PDF...");
       
-      const canvas = await html2canvas(previewRef.current, {
+      // Get the actual content element inside the preview
+      const contentElement = previewRef.current.querySelector('.cv-preview-content') || previewRef.current;
+      
+      const canvas = await html2canvas(contentElement as HTMLElement, {
         scale: 2,
         useCORS: true,
         logging: false,
+        width: 794, // A4 width at 96 DPI
+        windowWidth: 794,
       });
 
       const imgData = canvas.toDataURL('image/png');
@@ -56,11 +61,36 @@ export const CVEditor = ({ cvData, onUpdate, fileName, onBack, cvId }: CVEditorP
       const pdfHeight = pdf.internal.pageSize.getHeight();
       const imgWidth = canvas.width;
       const imgHeight = canvas.height;
-      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
-      const imgX = (pdfWidth - imgWidth * ratio) / 2;
-      const imgY = 0;
-
-      pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
+      
+      // Scale to fill the page width with margins
+      const margin = 10; // 10mm margins
+      const availableWidth = pdfWidth - (margin * 2);
+      const ratio = availableWidth / imgWidth;
+      const scaledHeight = imgHeight * ratio;
+      
+      // Handle multi-page if content is too long
+      if (scaledHeight > pdfHeight - (margin * 2)) {
+        const pageHeight = (pdfHeight - (margin * 2)) / ratio;
+        let position = 0;
+        
+        while (position < imgHeight) {
+          if (position > 0) {
+            pdf.addPage();
+          }
+          pdf.addImage(
+            imgData, 
+            'PNG', 
+            margin, 
+            margin - (position * ratio), 
+            imgWidth * ratio, 
+            imgHeight * ratio
+          );
+          position += pageHeight;
+        }
+      } else {
+        pdf.addImage(imgData, 'PNG', margin, margin, availableWidth, scaledHeight);
+      }
+      
       pdf.save(`${fileName.replace(/\.[^/.]+$/, '')}_CV.pdf`);
       
       toast.success("PDF exported successfully!");
@@ -212,7 +242,7 @@ export const CVEditor = ({ cvData, onUpdate, fileName, onBack, cvId }: CVEditorP
         </div>
 
         {/* Right Pane: Preview */}
-        <div className={`${activeTab === 'form' ? 'hidden lg:block' : ''}`}>
+        <div className={`${activeTab === 'form' ? 'hidden lg:block' : ''} overflow-x-auto`}>
           <div className="sticky top-6" ref={previewRef}>
             <CVPreview cvData={cvData} />
           </div>
