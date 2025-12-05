@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { FileText, Trash2, Download, Edit, Sparkles, Loader2, Copy } from "lucide-react";
 import { useCVs, SavedCV } from "@/hooks/useCVs";
 import { useAppSettings } from "@/hooks/useAppSettings";
@@ -35,6 +36,10 @@ export const CVList = ({ onEdit }: CVListProps) => {
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [isExportingProfile, setIsExportingProfile] = useState(false);
   
+  // Profile additional fields
+  const [noticePeriod, setNoticePeriod] = useState<string>("");
+  const [invoicePrice, setInvoicePrice] = useState<string>("");
+  
   // Download dialog state
   const [showDownloadDialog, setShowDownloadDialog] = useState(false);
   const [selectedCV, setSelectedCV] = useState<SavedCV | null>(null);
@@ -56,6 +61,8 @@ export const CVList = ({ onEdit }: CVListProps) => {
 
       setProfileDescription(data.profileDescription);
       setProfileCandidateName(cvData.candidate.fullName);
+      setNoticePeriod("");
+      setInvoicePrice("");
       setShowProfileDialog(true);
     } catch (error) {
       console.error('Error generating profile:', error);
@@ -65,10 +72,24 @@ export const CVList = ({ onEdit }: CVListProps) => {
     }
   };
 
+  const getFullProfileText = () => {
+    let text = profileDescription;
+    if (noticePeriod || invoicePrice) {
+      text += '\n\n';
+      if (noticePeriod) {
+        text += `Notice period from current job: ${noticePeriod}\n`;
+      }
+      if (invoicePrice) {
+        text += `\nMonthly invoice price all costs included: EUR ${invoicePrice} (40 hours per week/full-time)`;
+      }
+    }
+    return text;
+  };
+
   const handleExportProfileWord = async () => {
     setIsExportingProfile(true);
     try {
-      const blob = await generateProfileWordDocument(profileDescription, {
+      const blob = await generateProfileWordDocument(getFullProfileText(), {
         logoUrl: logoUrl || undefined,
         candidateName: profileCandidateName,
       });
@@ -92,7 +113,7 @@ export const CVList = ({ onEdit }: CVListProps) => {
   const handleExportProfilePDF = async () => {
     setIsExportingProfile(true);
     try {
-      await generateProfilePDF(profileDescription, {
+      await generateProfilePDF(getFullProfileText(), {
         logoUrl: logoUrl || undefined,
         candidateName: profileCandidateName,
       });
@@ -142,7 +163,7 @@ export const CVList = ({ onEdit }: CVListProps) => {
   };
 
   const copyToClipboard = () => {
-    navigator.clipboard.writeText(profileDescription);
+    navigator.clipboard.writeText(getFullProfileText());
     toast.success("Copied to clipboard!");
   };
 
@@ -287,6 +308,37 @@ export const CVList = ({ onEdit }: CVListProps) => {
             <div className="p-4 bg-muted rounded-lg whitespace-pre-wrap text-sm">
               {profileDescription}
             </div>
+            
+            {/* Optional fields */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="notice-period">Notice Period (optional)</Label>
+                <Input
+                  id="notice-period"
+                  placeholder="e.g., 1 month"
+                  value={noticePeriod}
+                  onChange={(e) => setNoticePeriod(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="invoice-price">Monthly Invoice Price EUR (optional)</Label>
+                <Input
+                  id="invoice-price"
+                  placeholder="e.g., 4.585"
+                  value={invoicePrice}
+                  onChange={(e) => setInvoicePrice(e.target.value)}
+                />
+              </div>
+            </div>
+            
+            {(noticePeriod || invoicePrice) && (
+              <div className="p-3 bg-primary/10 rounded-lg text-sm">
+                <p className="font-medium mb-1">Will be added to export:</p>
+                {noticePeriod && <p>Notice period from current job: {noticePeriod}</p>}
+                {invoicePrice && <p>Monthly invoice price all costs included: EUR {invoicePrice} (40 hours per week/full-time)</p>}
+              </div>
+            )}
+            
             <div className="flex flex-wrap gap-2">
               <Button onClick={copyToClipboard} variant="outline" className="flex-1">
                 <Copy className="h-4 w-4 mr-2" />
