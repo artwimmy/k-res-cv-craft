@@ -243,7 +243,7 @@ export const CVEditor = ({ cvData, onUpdate, fileName, onBack, cvId }: CVEditorP
 
         {/* Right Pane: Preview */}
         <div className={`${activeTab === 'form' ? 'hidden lg:block' : ''} overflow-x-auto`}>
-          <div className="sticky top-6" ref={previewRef}>
+          <div ref={previewRef} className="min-w-fit">
             <CVPreview cvData={cvData} />
           </div>
         </div>

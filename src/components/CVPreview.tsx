@@ -18,7 +18,7 @@ export const CVPreview = ({ cvData }: CVPreviewProps) => {
   };
 
   return (
-    <Card className="cv-preview-content p-8 bg-white shadow-lg relative">
+    <Card className="cv-preview-content p-8 bg-white shadow-lg relative" style={{ width: '210mm', minWidth: '210mm' }}>
       {/* Logo in top-right */}
       {logoUrl && (
         <div className="absolute top-6 right-6">
