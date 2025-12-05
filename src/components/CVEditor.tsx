@@ -46,11 +46,11 @@ export const CVEditor = ({ cvData, onUpdate, fileName, onBack, cvId }: CVEditorP
         scale: 2,
         useCORS: true,
         logging: false,
-        width: 794, // A4 width at 96 DPI
-        windowWidth: 794,
+        backgroundColor: '#ffffff',
       });
 
-      const imgData = canvas.toDataURL('image/png');
+      // Use JPEG format which is more reliable with jsPDF
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
@@ -79,7 +79,7 @@ export const CVEditor = ({ cvData, onUpdate, fileName, onBack, cvId }: CVEditorP
           }
           pdf.addImage(
             imgData, 
-            'PNG', 
+            'JPEG', 
             margin, 
             margin - (position * ratio), 
             imgWidth * ratio, 
@@ -88,7 +88,7 @@ export const CVEditor = ({ cvData, onUpdate, fileName, onBack, cvId }: CVEditorP
           position += pageHeight;
         }
       } else {
-        pdf.addImage(imgData, 'PNG', margin, margin, availableWidth, scaledHeight);
+        pdf.addImage(imgData, 'JPEG', margin, margin, availableWidth, scaledHeight);
       }
       
       pdf.save(`${fileName.replace(/\.[^/.]+$/, '')}_CV.pdf`);

@@ -3,11 +3,12 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { FileText, Trash2, Download, Edit, Sparkles, Loader2 } from "lucide-react";
+import { FileText, Trash2, Download, Edit, Sparkles, Loader2, Copy } from "lucide-react";
 import { useCVs, SavedCV } from "@/hooks/useCVs";
 import { useAppSettings } from "@/hooks/useAppSettings";
 import { formatDistanceToNow } from "date-fns";
 import { generateWordDocument } from "@/lib/wordExport";
+import { generateProfileWordDocument, generateProfilePDF } from "@/lib/profileExport";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { CVData } from "@/pages/Index";
@@ -29,8 +30,10 @@ export const CVList = ({ onEdit }: CVListProps) => {
   const { logoUrl } = useAppSettings();
   const [generatingId, setGeneratingId] = useState<string | null>(null);
   const [profileDescription, setProfileDescription] = useState<string>("");
+  const [profileCandidateName, setProfileCandidateName] = useState<string>("");
   const [showProfileDialog, setShowProfileDialog] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [isExportingProfile, setIsExportingProfile] = useState(false);
   
   // Download dialog state
   const [showDownloadDialog, setShowDownloadDialog] = useState(false);
@@ -52,12 +55,53 @@ export const CVList = ({ onEdit }: CVListProps) => {
       }
 
       setProfileDescription(data.profileDescription);
+      setProfileCandidateName(cvData.candidate.fullName);
       setShowProfileDialog(true);
     } catch (error) {
       console.error('Error generating profile:', error);
       toast.error('Failed to generate profile description');
     } finally {
       setGeneratingId(null);
+    }
+  };
+
+  const handleExportProfileWord = async () => {
+    setIsExportingProfile(true);
+    try {
+      const blob = await generateProfileWordDocument(profileDescription, {
+        logoUrl: logoUrl || undefined,
+        candidateName: profileCandidateName,
+      });
+      
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${profileCandidateName.replace(/\s+/g, '_')}_Profile.docx`;
+      link.click();
+      URL.revokeObjectURL(url);
+      
+      toast.success("Word document exported!");
+    } catch (error) {
+      console.error('Error exporting profile to Word:', error);
+      toast.error('Failed to export profile');
+    } finally {
+      setIsExportingProfile(false);
+    }
+  };
+
+  const handleExportProfilePDF = async () => {
+    setIsExportingProfile(true);
+    try {
+      await generateProfilePDF(profileDescription, {
+        logoUrl: logoUrl || undefined,
+        candidateName: profileCandidateName,
+      });
+      toast.success("PDF exported!");
+    } catch (error) {
+      console.error('Error exporting profile to PDF:', error);
+      toast.error('Failed to export profile');
+    } finally {
+      setIsExportingProfile(false);
     }
   };
 
@@ -236,16 +280,36 @@ export const CVList = ({ onEdit }: CVListProps) => {
           <DialogHeader>
             <DialogTitle>Generated Profile Description</DialogTitle>
             <DialogDescription>
-              AI-generated professional profile based on the CV
+              AI-generated professional profile for {profileCandidateName}
             </DialogDescription>
           </DialogHeader>
           <div className="mt-4 space-y-4">
             <div className="p-4 bg-muted rounded-lg whitespace-pre-wrap text-sm">
               {profileDescription}
             </div>
-            <Button onClick={copyToClipboard} className="w-full">
-              Copy to Clipboard
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={copyToClipboard} variant="outline" className="flex-1">
+                <Copy className="h-4 w-4 mr-2" />
+                Copy to Clipboard
+              </Button>
+              <Button 
+                onClick={handleExportProfileWord} 
+                variant="outline" 
+                className="flex-1"
+                disabled={isExportingProfile}
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                {isExportingProfile ? 'Exporting...' : 'Export Word'}
+              </Button>
+              <Button 
+                onClick={handleExportProfilePDF} 
+                className="flex-1"
+                disabled={isExportingProfile}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                {isExportingProfile ? 'Exporting...' : 'Export PDF'}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
