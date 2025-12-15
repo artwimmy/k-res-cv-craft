@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Plus, X } from "lucide-react";
+import { Plus, X, Link as LinkIcon } from "lucide-react";
 import type { CVData } from "@/pages/Index";
 
 interface CVFormProps {
@@ -40,6 +40,21 @@ export const CVForm = ({ cvData, onUpdate }: CVFormProps) => {
   const removeExperience = (index: number) => {
     const newData = { ...cvData };
     newData.experience.splice(index, 1);
+    onUpdate(newData);
+  };
+
+  const addLink = () => {
+    const newData = { ...cvData };
+    if (!newData.candidate.links) {
+      newData.candidate.links = [];
+    }
+    newData.candidate.links.push({ label: "", url: "" });
+    onUpdate(newData);
+  };
+
+  const removeLink = (index: number) => {
+    const newData = { ...cvData };
+    newData.candidate.links.splice(index, 1);
     onUpdate(newData);
   };
 
@@ -85,6 +100,49 @@ export const CVForm = ({ cvData, onUpdate }: CVFormProps) => {
               value={cvData.candidate.location}
               onChange={(e) => updateField(['candidate', 'location'], e.target.value)}
             />
+          </div>
+
+          {/* Social Links */}
+          <div className="pt-4 border-t">
+            <div className="flex justify-between items-center mb-3">
+              <Label className="flex items-center gap-2">
+                <LinkIcon className="h-4 w-4" />
+                Social Links / Profiles
+              </Label>
+              <Button onClick={addLink} size="sm" variant="outline">
+                <Plus className="h-4 w-4 mr-1" />
+                Add Link
+              </Button>
+            </div>
+            <div className="space-y-3">
+              {(cvData.candidate.links || []).map((link, index) => (
+                <div key={index} className="flex gap-2 items-start">
+                  <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <Input
+                      placeholder="Label (e.g., LinkedIn, GitHub)"
+                      value={link.label}
+                      onChange={(e) => updateField(['candidate', 'links', index, 'label'], e.target.value)}
+                    />
+                    <Input
+                      placeholder="URL"
+                      value={link.url}
+                      onChange={(e) => updateField(['candidate', 'links', index, 'url'], e.target.value)}
+                    />
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeLink(index)}
+                    className="shrink-0"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+              {(!cvData.candidate.links || cvData.candidate.links.length === 0) && (
+                <p className="text-sm text-muted-foreground">No social links added yet.</p>
+              )}
+            </div>
           </div>
         </div>
       </Card>
