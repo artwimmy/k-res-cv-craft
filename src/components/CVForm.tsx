@@ -58,6 +58,30 @@ export const CVForm = ({ cvData, onUpdate }: CVFormProps) => {
     onUpdate(newData);
   };
 
+  const addSkillCategory = () => {
+    const newData = { ...cvData };
+    newData.skills.push({ category: "", items: [] });
+    onUpdate(newData);
+  };
+
+  const removeSkillCategory = (index: number) => {
+    const newData = { ...cvData };
+    newData.skills.splice(index, 1);
+    onUpdate(newData);
+  };
+
+  const addEducation = () => {
+    const newData = { ...cvData };
+    newData.education.push({ degree: "", institution: "", year: "" });
+    onUpdate(newData);
+  };
+
+  const removeEducation = (index: number) => {
+    const newData = { ...cvData };
+    newData.education.splice(index, 1);
+    onUpdate(newData);
+  };
+
   return (
     <div className="space-y-6">
       {/* Candidate Info */}
@@ -242,16 +266,23 @@ export const CVForm = ({ cvData, onUpdate }: CVFormProps) => {
 
       {/* Skills */}
       <Card className="p-6">
-        <h2 className="text-xl font-semibold mb-4">Skills</h2>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-semibold">Skills</h2>
+          <Button onClick={addSkillCategory} size="sm" variant="outline">
+            <Plus className="h-4 w-4 mr-2" />
+            Add Category
+          </Button>
+        </div>
         <div className="space-y-4">
           {cvData.skills.map((skillGroup, index) => (
-            <div key={index}>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div key={index} className="flex gap-2 items-start">
+              <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
                   <Label>Category</Label>
                   <Input
                     value={skillGroup.category}
                     onChange={(e) => updateField(['skills', index, 'category'], e.target.value)}
+                    placeholder="e.g., Programming Languages"
                   />
                 </div>
                 <div className="md:col-span-3">
@@ -259,44 +290,77 @@ export const CVForm = ({ cvData, onUpdate }: CVFormProps) => {
                   <Input
                     value={skillGroup.items.join(', ')}
                     onChange={(e) => updateField(['skills', index, 'items'], e.target.value.split(',').map(s => s.trim()))}
+                    placeholder="e.g., JavaScript, Python, Go"
                   />
                 </div>
               </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => removeSkillCategory(index)}
+                className="shrink-0 mt-6"
+              >
+                <X className="h-4 w-4" />
+              </Button>
             </div>
           ))}
+          {cvData.skills.length === 0 && (
+            <p className="text-sm text-muted-foreground">No skill categories added yet.</p>
+          )}
         </div>
       </Card>
 
       {/* Education */}
       <Card className="p-6">
-        <h2 className="text-xl font-semibold mb-4">Education</h2>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-semibold">Education</h2>
+          <Button onClick={addEducation} size="sm" variant="outline">
+            <Plus className="h-4 w-4 mr-2" />
+            Add Education
+          </Button>
+        </div>
         <div className="space-y-4">
           {cvData.education.map((edu, index) => (
-            <div key={index} className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <Label>Degree</Label>
-                <Input
-                  value={edu.degree}
-                  onChange={(e) => updateField(['education', index, 'degree'], e.target.value)}
-                />
+            <div key={index} className="flex gap-2 items-start">
+              <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <Label>Degree</Label>
+                  <Input
+                    value={edu.degree}
+                    onChange={(e) => updateField(['education', index, 'degree'], e.target.value)}
+                    placeholder="e.g., Bachelor of Science"
+                  />
+                </div>
+                <div>
+                  <Label>Institution</Label>
+                  <Input
+                    value={edu.institution}
+                    onChange={(e) => updateField(['education', index, 'institution'], e.target.value)}
+                    placeholder="e.g., University of Amsterdam"
+                  />
+                </div>
+                <div>
+                  <Label>Year</Label>
+                  <Input
+                    value={edu.year}
+                    onChange={(e) => updateField(['education', index, 'year'], e.target.value)}
+                    placeholder="e.g., 2020"
+                  />
+                </div>
               </div>
-              <div>
-                <Label>Institution</Label>
-                <Input
-                  value={edu.institution}
-                  onChange={(e) => updateField(['education', index, 'institution'], e.target.value)}
-                />
-              </div>
-              <div>
-                <Label>Year</Label>
-                <Input
-                  value={edu.year}
-                  onChange={(e) => updateField(['education', index, 'year'], e.target.value)}
-                  placeholder="e.g., 2020"
-                />
-              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => removeEducation(index)}
+                className="shrink-0 mt-6"
+              >
+                <X className="h-4 w-4" />
+              </Button>
             </div>
           ))}
+          {cvData.education.length === 0 && (
+            <p className="text-sm text-muted-foreground">No education entries added yet.</p>
+          )}
         </div>
       </Card>
     </div>
