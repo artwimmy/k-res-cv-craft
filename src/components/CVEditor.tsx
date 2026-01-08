@@ -41,10 +41,17 @@ export const CVEditor = ({ cvData, onUpdate, fileName, onBack, cvId }: CVEditorP
     try {
       toast.info("Generating PDF...");
       
-      const contentElement = previewRef.current.querySelector('.cv-preview-content') as HTMLElement;
+      // Find the cv-preview-content element - it might be the ref itself or a child
+      let contentElement = previewRef.current.querySelector('.cv-preview-content') as HTMLElement;
+      if (!contentElement && previewRef.current.classList?.contains('cv-preview-content')) {
+        contentElement = previewRef.current;
+      }
+      // If still not found, try finding the Card element inside
       if (!contentElement) {
-        toast.error("Preview content not found");
-        return;
+        contentElement = previewRef.current.querySelector('.bg-white') as HTMLElement;
+      }
+      if (!contentElement) {
+        contentElement = previewRef.current;
       }
 
       // A4 dimensions in mm
