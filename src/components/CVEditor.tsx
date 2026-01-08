@@ -26,6 +26,7 @@ export const CVEditor = ({ cvData, onUpdate, fileName, onBack, cvId }: CVEditorP
   const [activeTab, setActiveTab] = useState<'form' | 'preview'>('form');
   const [anonymize, setAnonymize] = useState(false);
   const [isExportingWord, setIsExportingWord] = useState(false);
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
   const { saveCV, isSaving } = useCVs();
   const { logoUrl } = useAppSettings();
   const previewRef = useRef<HTMLDivElement>(null);
@@ -36,67 +37,99 @@ export const CVEditor = ({ cvData, onUpdate, fileName, onBack, cvId }: CVEditorP
       return;
     }
 
+    setIsExportingPDF(true);
     try {
       toast.info("Generating PDF...");
       
-      // Get the actual content element inside the preview
-      const contentElement = previewRef.current.querySelector('.cv-preview-content') || previewRef.current;
-      
-      const canvas = await html2canvas(contentElement as HTMLElement, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-      });
+      const contentElement = previewRef.current.querySelector('.cv-preview-content') as HTMLElement;
+      if (!contentElement) {
+        toast.error("Preview content not found");
+        return;
+      }
 
-      // Use JPEG format which is more reliable with jsPDF
-      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      // A4 dimensions in mm
+      const A4_WIDTH_MM = 210;
+      const A4_HEIGHT_MM = 297;
+      const MARGIN_MM = 10;
+      const CONTENT_WIDTH_MM = A4_WIDTH_MM - (MARGIN_MM * 2);
+      const CONTENT_HEIGHT_MM = A4_HEIGHT_MM - (MARGIN_MM * 2);
+
+      // Create PDF
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
         format: 'a4',
       });
 
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
+      // Get all major sections for smart page breaking
+      const sections = contentElement.querySelectorAll('[style*="pageBreakInside"], [style*="breakInside"]');
+      
+      // Capture the entire content
+      const canvas = await html2canvas(contentElement, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+        windowWidth: contentElement.scrollWidth,
+        windowHeight: contentElement.scrollHeight,
+      });
+
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
       const imgWidth = canvas.width;
       const imgHeight = canvas.height;
-      
-      // Scale to fill the page width with margins
-      const margin = 10; // 10mm margins
-      const availableWidth = pdfWidth - (margin * 2);
-      const ratio = availableWidth / imgWidth;
-      const scaledHeight = imgHeight * ratio;
-      
-      // Handle multi-page if content is too long
-      if (scaledHeight > pdfHeight - (margin * 2)) {
-        const pageHeight = (pdfHeight - (margin * 2)) / ratio;
-        let position = 0;
-        
-        while (position < imgHeight) {
-          if (position > 0) {
+
+      // Calculate scaling
+      const scale = CONTENT_WIDTH_MM / (imgWidth / 2); // Divide by 2 because of scale: 2
+      const scaledHeight = (imgHeight / 2) * scale;
+
+      // Calculate how many pages we need
+      const totalPages = Math.ceil(scaledHeight / CONTENT_HEIGHT_MM);
+
+      if (totalPages === 1) {
+        // Single page - just add the image
+        pdf.addImage(imgData, 'JPEG', MARGIN_MM, MARGIN_MM, CONTENT_WIDTH_MM, scaledHeight);
+      } else {
+        // Multi-page - slice the image properly
+        const pageHeightInPx = (CONTENT_HEIGHT_MM / scale) * 2; // Convert back to canvas pixels
+
+        for (let page = 0; page < totalPages; page++) {
+          if (page > 0) {
             pdf.addPage();
           }
-          pdf.addImage(
-            imgData, 
-            'JPEG', 
-            margin, 
-            margin - (position * ratio), 
-            imgWidth * ratio, 
-            imgHeight * ratio
-          );
-          position += pageHeight;
+
+          // Create a temporary canvas for this page slice
+          const pageCanvas = document.createElement('canvas');
+          pageCanvas.width = imgWidth;
+          pageCanvas.height = Math.min(pageHeightInPx, imgHeight - (page * pageHeightInPx));
+          
+          const ctx = pageCanvas.getContext('2d');
+          if (ctx) {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+            
+            ctx.drawImage(
+              canvas,
+              0, page * pageHeightInPx, // Source position
+              imgWidth, pageCanvas.height, // Source dimensions
+              0, 0, // Destination position
+              pageCanvas.width, pageCanvas.height // Destination dimensions
+            );
+          }
+
+          const pageImgData = pageCanvas.toDataURL('image/jpeg', 0.95);
+          const pageScaledHeight = (pageCanvas.height / 2) * scale;
+          
+          pdf.addImage(pageImgData, 'JPEG', MARGIN_MM, MARGIN_MM, CONTENT_WIDTH_MM, pageScaledHeight);
         }
-      } else {
-        pdf.addImage(imgData, 'JPEG', margin, margin, availableWidth, scaledHeight);
       }
       
       pdf.save(`${fileName.replace(/\.[^/.]+$/, '')}_CV.pdf`);
-      
       toast.success("PDF exported successfully!");
     } catch (error) {
       console.error('Error generating PDF:', error);
       toast.error("Failed to generate PDF");
+    } finally {
+      setIsExportingPDF(false);
     }
   };
 
@@ -200,9 +233,9 @@ export const CVEditor = ({ cvData, onUpdate, fileName, onBack, cvId }: CVEditorP
               <FileText className="mr-2 h-4 w-4" />
               {isExportingWord ? 'Generating...' : 'DOCX'}
             </Button>
-            <Button size="sm" onClick={handleExportPDF}>
+            <Button size="sm" onClick={handleExportPDF} disabled={isExportingPDF}>
               <Download className="mr-2 h-4 w-4" />
-              Export PDF
+              {isExportingPDF ? 'Generating...' : 'Export PDF'}
             </Button>
           </div>
         </div>

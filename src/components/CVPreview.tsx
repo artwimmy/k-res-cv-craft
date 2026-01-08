@@ -18,7 +18,7 @@ export const CVPreview = ({ cvData }: CVPreviewProps) => {
   };
 
   return (
-    <Card className="cv-preview-content p-8 bg-white shadow-lg relative" style={{ width: '210mm', minWidth: '210mm' }}>
+    <Card className="cv-preview-content p-8 bg-white shadow-lg relative print:shadow-none" style={{ width: '210mm', minWidth: '210mm' }}>
       {/* Logo in top-right */}
       {logoUrl && (
         <div className="absolute top-6 right-6">
@@ -31,8 +31,8 @@ export const CVPreview = ({ cvData }: CVPreviewProps) => {
       )}
 
       <div className="space-y-6 text-sm">
-        {/* Header */}
-        <div className="border-b-2 border-primary pb-6">
+        {/* Header - avoid page break inside */}
+        <div className="border-b-2 border-primary pb-6" style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
           <h1 className="text-3xl font-bold text-foreground mb-2">
             {cvData.candidate.fullName}
           </h1>
@@ -73,7 +73,7 @@ export const CVPreview = ({ cvData }: CVPreviewProps) => {
 
         {/* Professional Summary */}
         {cvData.summary && (
-          <div>
+          <div style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
             <h2 className="text-lg font-bold text-foreground mb-3 uppercase tracking-wide">
               Professional Summary
             </h2>
@@ -85,7 +85,7 @@ export const CVPreview = ({ cvData }: CVPreviewProps) => {
 
         {/* Skills */}
         {cvData.skills.length > 0 && (
-          <div>
+          <div style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
             <h2 className="text-lg font-bold text-foreground mb-3 uppercase tracking-wide">
               Technical Skills
             </h2>
@@ -107,12 +107,12 @@ export const CVPreview = ({ cvData }: CVPreviewProps) => {
         {/* Experience */}
         {cvData.experience.length > 0 && (
           <div>
-            <h2 className="text-lg font-bold text-foreground mb-3 uppercase tracking-wide">
+            <h2 className="text-lg font-bold text-foreground mb-3 uppercase tracking-wide" style={{ pageBreakAfter: 'avoid', breakAfter: 'avoid' }}>
               Professional Experience
             </h2>
             <div className="space-y-5">
               {cvData.experience.map((exp, idx) => (
-                <div key={idx}>
+                <div key={idx} style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
                   <div className="flex justify-between items-start mb-2">
                     <div>
                       <h3 className="font-bold text-foreground">
@@ -143,7 +143,7 @@ export const CVPreview = ({ cvData }: CVPreviewProps) => {
 
         {/* Education */}
         {cvData.education.length > 0 && (
-          <div>
+          <div style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
             <h2 className="text-lg font-bold text-foreground mb-3 uppercase tracking-wide">
               Education
             </h2>
@@ -165,7 +165,7 @@ export const CVPreview = ({ cvData }: CVPreviewProps) => {
 
         {/* Certifications */}
         {cvData.certifications && cvData.certifications.length > 0 && (
-          <div>
+          <div style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
             <h2 className="text-lg font-bold text-foreground mb-3 uppercase tracking-wide">
               Certifications
             </h2>
@@ -185,7 +185,7 @@ export const CVPreview = ({ cvData }: CVPreviewProps) => {
 
         {/* Languages */}
         {cvData.languages && cvData.languages.length > 0 && (
-          <div>
+          <div style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
             <h2 className="text-lg font-bold text-foreground mb-3 uppercase tracking-wide">
               Languages
             </h2>
