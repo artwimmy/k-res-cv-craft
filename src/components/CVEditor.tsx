@@ -48,21 +48,55 @@ export const CVEditor = ({ cvData, onUpdate, fileName, onBack, cvId }: CVEditorP
         return;
       }
 
-      // Force parent visibility
+      // Force parent visibility for capture
       const parentContainer = previewRef.current.parentElement;
-      const parentOriginalDisplay = parentContainer?.style.display || '';
+      const parentOriginalStyles = parentContainer ? {
+        display: parentContainer.style.display,
+        visibility: parentContainer.style.visibility,
+        position: parentContainer.style.position,
+      } : null;
+      
       if (parentContainer) {
         parentContainer.style.display = 'block';
+        parentContainer.style.visibility = 'visible';
       }
 
-      // A4 dimensions
+      await new Promise(resolve => setTimeout(resolve, 150));
+
+      // Capture the entire content as one image
+      const canvas = await html2canvas(contentElement, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+        onclone: (clonedDoc) => {
+          const clonedElement = clonedDoc.querySelector('.cv-preview-content') as HTMLElement;
+          if (clonedElement) {
+            clonedElement.style.display = 'block';
+            clonedElement.style.visibility = 'visible';
+            clonedElement.style.opacity = '1';
+            clonedElement.style.position = 'relative';
+          }
+        }
+      });
+
+      // Restore parent
+      if (parentContainer && parentOriginalStyles) {
+        Object.assign(parentContainer.style, parentOriginalStyles);
+      }
+
+      if (canvas.width === 0 || canvas.height === 0) {
+        toast.error("Failed to capture content");
+        setIsExportingPDF(false);
+        return;
+      }
+
+      // A4 dimensions in mm
       const A4_WIDTH_MM = 210;
       const A4_HEIGHT_MM = 297;
-      const MARGIN_MM = 15;
+      const MARGIN_MM = 12;
       const CONTENT_WIDTH_MM = A4_WIDTH_MM - (MARGIN_MM * 2);
       const CONTENT_HEIGHT_MM = A4_HEIGHT_MM - (MARGIN_MM * 2);
-
-      await new Promise(resolve => setTimeout(resolve, 100));
 
       // Create PDF
       const pdf = new jsPDF({
@@ -71,128 +105,56 @@ export const CVEditor = ({ cvData, onUpdate, fileName, onBack, cvId }: CVEditorP
         format: 'a4',
       });
 
-      // Get all sections that should not be split
-      const sections = contentElement.querySelectorAll('[style*="breakInside"], [style*="pageBreakInside"], .space-y-6 > div');
+      const imgWidth = canvas.width;
+      const imgHeight = canvas.height;
       
-      // If no sections found, capture entire content at once
-      if (sections.length === 0) {
-        const canvas = await html2canvas(contentElement, {
-          scale: 2,
-          useCORS: true,
-          backgroundColor: '#ffffff',
-        });
-        
-        const imgData = canvas.toDataURL('image/jpeg', 0.95);
-        const scale = CONTENT_WIDTH_MM / (canvas.width / 2);
-        const scaledHeight = (canvas.height / 2) * scale;
-        
-        pdf.addImage(imgData, 'JPEG', MARGIN_MM, MARGIN_MM, CONTENT_WIDTH_MM, scaledHeight);
+      // Scale to fit A4 width (accounting for html2canvas scale of 2)
+      const scaleFactor = CONTENT_WIDTH_MM / (imgWidth / 2);
+      const scaledTotalHeight = (imgHeight / 2) * scaleFactor;
+      
+      // If content fits on one page
+      if (scaledTotalHeight <= CONTENT_HEIGHT_MM) {
+        const imgData = canvas.toDataURL('image/jpeg', 0.92);
+        pdf.addImage(imgData, 'JPEG', MARGIN_MM, MARGIN_MM, CONTENT_WIDTH_MM, scaledTotalHeight);
       } else {
-        // Smart page breaking: capture sections and place them intelligently
-        let currentY = MARGIN_MM;
-        let currentPage = 0;
-        
-        // First, capture the entire content as one image
-        const fullCanvas = await html2canvas(contentElement, {
-          scale: 2,
-          useCORS: true,
-          backgroundColor: '#ffffff',
-          onclone: (clonedDoc) => {
-            const clonedElement = clonedDoc.querySelector('.cv-preview-content') as HTMLElement;
-            if (clonedElement) {
-              clonedElement.style.display = 'block';
-              clonedElement.style.visibility = 'visible';
-            }
-          }
-        });
+        // Multi-page: calculate page height in canvas pixels
+        const pageHeightPx = (CONTENT_HEIGHT_MM / scaleFactor) * 2;
+        const totalPages = Math.ceil(imgHeight / pageHeightPx);
 
-        const fullImgWidth = fullCanvas.width;
-        const scale = CONTENT_WIDTH_MM / (fullImgWidth / 2);
-        
-        // Get section positions relative to the content element
-        const sectionData: { top: number; height: number; bottom: number }[] = [];
-        const contentRect = contentElement.getBoundingClientRect();
-        
-        sections.forEach((section) => {
-          const rect = (section as HTMLElement).getBoundingClientRect();
-          const top = (rect.top - contentRect.top) * 2; // Scale factor of 2
-          const height = rect.height * 2;
-          sectionData.push({ top, height, bottom: top + height });
-        });
-
-        // Calculate page breaks based on sections
-        const pageHeightPx = (CONTENT_HEIGHT_MM / scale) * 2;
-        const breaks: number[] = [0]; // Start positions for each page
-        let currentBreak = 0;
-
-        while (currentBreak < fullCanvas.height) {
-          let nextBreak = currentBreak + pageHeightPx;
-          
-          // Find if we're cutting through a section
-          for (const section of sectionData) {
-            // If the break would cut through this section
-            if (nextBreak > section.top && nextBreak < section.bottom) {
-              // Move the break to before this section starts (with a small buffer)
-              if (section.top > currentBreak + 50) { // Ensure we have at least some content
-                nextBreak = section.top - 10;
-              }
-              break;
-            }
-          }
-          
-          // Ensure we don't go backwards or get stuck
-          if (nextBreak <= currentBreak) {
-            nextBreak = currentBreak + pageHeightPx;
-          }
-          
-          if (nextBreak >= fullCanvas.height) {
-            breaks.push(fullCanvas.height);
-            break;
-          }
-          
-          breaks.push(nextBreak);
-          currentBreak = nextBreak;
-        }
-
-        // Render each page
-        for (let i = 0; i < breaks.length - 1; i++) {
-          if (i > 0) {
+        for (let page = 0; page < totalPages; page++) {
+          if (page > 0) {
             pdf.addPage();
           }
 
-          const startY = breaks[i];
-          const endY = breaks[i + 1];
-          const sliceHeight = endY - startY;
-
-          // Create canvas for this page slice
+          const sourceY = page * pageHeightPx;
+          const sourceHeight = Math.min(pageHeightPx, imgHeight - sourceY);
+          
+          // Create a canvas for this page
           const pageCanvas = document.createElement('canvas');
-          pageCanvas.width = fullImgWidth;
-          pageCanvas.height = sliceHeight;
-
+          pageCanvas.width = imgWidth;
+          pageCanvas.height = sourceHeight;
+          
           const ctx = pageCanvas.getContext('2d');
           if (ctx) {
+            // Fill with white background
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
             
+            // Draw the slice from the full canvas
             ctx.drawImage(
-              fullCanvas,
-              0, startY,
-              fullImgWidth, sliceHeight,
-              0, 0,
-              fullImgWidth, sliceHeight
+              canvas,
+              0, sourceY,           // Source x, y
+              imgWidth, sourceHeight, // Source width, height
+              0, 0,                 // Dest x, y
+              imgWidth, sourceHeight  // Dest width, height
             );
           }
 
-          const pageImgData = pageCanvas.toDataURL('image/jpeg', 0.95);
-          const pageScaledHeight = (sliceHeight / 2) * scale;
-
+          const pageImgData = pageCanvas.toDataURL('image/jpeg', 0.92);
+          const pageScaledHeight = (sourceHeight / 2) * scaleFactor;
+          
           pdf.addImage(pageImgData, 'JPEG', MARGIN_MM, MARGIN_MM, CONTENT_WIDTH_MM, pageScaledHeight);
         }
-      }
-
-      // Restore parent container
-      if (parentContainer) {
-        parentContainer.style.display = parentOriginalDisplay;
       }
       
       pdf.save(`${fileName.replace(/\.[^/.]+$/, '')}_CV.pdf`);
