@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Download, Save, FileText } from "lucide-react";
+import { ArrowLeft, Download, Save, FileText, Loader2 } from "lucide-react";
 import { CVForm } from "@/components/CVForm";
 import { CVPreview } from "@/components/CVPreview";
 import type { CVData } from "@/pages/Index";
@@ -41,17 +41,26 @@ export const CVEditor = ({ cvData, onUpdate, fileName, onBack, cvId }: CVEditorP
     try {
       toast.info("Generating PDF...");
       
-      // Find the cv-preview-content element - it might be the ref itself or a child
-      let contentElement = previewRef.current.querySelector('.cv-preview-content') as HTMLElement;
-      if (!contentElement && previewRef.current.classList?.contains('cv-preview-content')) {
-        contentElement = previewRef.current;
-      }
-      // If still not found, try finding the Card element inside
+      // Find the cv-preview-content element
+      const contentElement = previewRef.current.querySelector('.cv-preview-content') as HTMLElement;
       if (!contentElement) {
-        contentElement = previewRef.current.querySelector('.bg-white') as HTMLElement;
+        toast.error("Preview content not found");
+        setIsExportingPDF(false);
+        return;
       }
-      if (!contentElement) {
-        contentElement = previewRef.current;
+
+      // Temporarily make sure the element is visible and has proper dimensions
+      const originalStyles = {
+        position: contentElement.style.position,
+        left: contentElement.style.left,
+        visibility: contentElement.style.visibility,
+      };
+      
+      // Force the parent container to be visible too
+      const parentContainer = previewRef.current.parentElement;
+      const parentOriginalDisplay = parentContainer?.style.display || '';
+      if (parentContainer) {
+        parentContainer.style.display = 'block';
       }
 
       // A4 dimensions in mm
@@ -61,29 +70,53 @@ export const CVEditor = ({ cvData, onUpdate, fileName, onBack, cvId }: CVEditorP
       const CONTENT_WIDTH_MM = A4_WIDTH_MM - (MARGIN_MM * 2);
       const CONTENT_HEIGHT_MM = A4_HEIGHT_MM - (MARGIN_MM * 2);
 
+      // Wait a tick for any rendering to complete
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Capture the content
+      const canvas = await html2canvas(contentElement, {
+        scale: 2,
+        useCORS: true,
+        logging: true, // Enable logging for debugging
+        backgroundColor: '#ffffff',
+        width: contentElement.offsetWidth || 794, // A4 width in pixels at 96 DPI
+        height: contentElement.scrollHeight,
+        onclone: (clonedDoc) => {
+          // Ensure the cloned element is fully visible
+          const clonedElement = clonedDoc.querySelector('.cv-preview-content') as HTMLElement;
+          if (clonedElement) {
+            clonedElement.style.display = 'block';
+            clonedElement.style.visibility = 'visible';
+            clonedElement.style.opacity = '1';
+          }
+        }
+      });
+
+      // Restore parent container
+      if (parentContainer) {
+        parentContainer.style.display = parentOriginalDisplay;
+      }
+
+      // Restore original styles
+      Object.assign(contentElement.style, originalStyles);
+
+      // Check if canvas has content
+      if (canvas.width === 0 || canvas.height === 0) {
+        toast.error("Failed to capture preview content");
+        setIsExportingPDF(false);
+        return;
+      }
+
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      const imgWidth = canvas.width;
+      const imgHeight = canvas.height;
+
       // Create PDF
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
         format: 'a4',
       });
-
-      // Get all major sections for smart page breaking
-      const sections = contentElement.querySelectorAll('[style*="pageBreakInside"], [style*="breakInside"]');
-      
-      // Capture the entire content
-      const canvas = await html2canvas(contentElement, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-        windowWidth: contentElement.scrollWidth,
-        windowHeight: contentElement.scrollHeight,
-      });
-
-      const imgData = canvas.toDataURL('image/jpeg', 0.95);
-      const imgWidth = canvas.width;
-      const imgHeight = canvas.height;
 
       // Calculate scaling
       const scale = CONTENT_WIDTH_MM / (imgWidth / 2); // Divide by 2 because of scale: 2
@@ -241,7 +274,11 @@ export const CVEditor = ({ cvData, onUpdate, fileName, onBack, cvId }: CVEditorP
               {isExportingWord ? 'Generating...' : 'DOCX'}
             </Button>
             <Button size="sm" onClick={handleExportPDF} disabled={isExportingPDF}>
-              <Download className="mr-2 h-4 w-4" />
+              {isExportingPDF ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="mr-2 h-4 w-4" />
+              )}
               {isExportingPDF ? 'Generating...' : 'Export PDF'}
             </Button>
           </div>
@@ -281,9 +318,12 @@ export const CVEditor = ({ cvData, onUpdate, fileName, onBack, cvId }: CVEditorP
           <CVForm cvData={cvData} onUpdate={onUpdate} />
         </div>
 
-        {/* Right Pane: Preview */}
-        <div className={`${activeTab === 'form' ? 'hidden lg:block' : ''} overflow-x-auto`}>
-          <div ref={previewRef} className="min-w-fit">
+        {/* Right Pane: Preview - Always rendered but visually hidden on mobile when form is active */}
+        <div 
+          className={`overflow-x-auto ${activeTab === 'form' ? 'lg:block absolute lg:relative -left-[9999px] lg:left-0' : ''}`}
+          style={{ visibility: activeTab === 'form' ? 'hidden' : 'visible' }}
+        >
+          <div ref={previewRef} className="min-w-fit lg:visible" style={{ visibility: 'visible' }}>
             <CVPreview cvData={cvData} />
           </div>
         </div>
