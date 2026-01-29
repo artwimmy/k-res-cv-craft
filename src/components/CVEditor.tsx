@@ -63,41 +63,17 @@ export const CVEditor = ({ cvData, onUpdate, fileName, onBack, cvId }: CVEditorP
 
       await new Promise(resolve => setTimeout(resolve, 150));
 
-      // Capture the entire content as one image
-      const canvas = await html2canvas(contentElement, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-        onclone: (clonedDoc) => {
-          const clonedElement = clonedDoc.querySelector('.cv-preview-content') as HTMLElement;
-          if (clonedElement) {
-            clonedElement.style.display = 'block';
-            clonedElement.style.visibility = 'visible';
-            clonedElement.style.opacity = '1';
-            clonedElement.style.position = 'relative';
-          }
-        }
-      });
-
-      // Restore parent
-      if (parentContainer && parentOriginalStyles) {
-        Object.assign(parentContainer.style, parentOriginalStyles);
-      }
-
-      if (canvas.width === 0 || canvas.height === 0) {
-        toast.error("Failed to capture content");
-        setIsExportingPDF(false);
-        return;
-      }
-
-      // A4 dimensions in mm
+      // A4 dimensions in mm and pixels (at 96 DPI)
       const A4_WIDTH_MM = 210;
       const A4_HEIGHT_MM = 297;
       const MARGIN_MM = 12;
-      const CONTENT_WIDTH_MM = A4_WIDTH_MM - (MARGIN_MM * 2);
       const CONTENT_HEIGHT_MM = A4_HEIGHT_MM - (MARGIN_MM * 2);
+      const MM_TO_PX = 3.7795; // 96 DPI conversion
+      const CONTENT_HEIGHT_PX = CONTENT_HEIGHT_MM * MM_TO_PX;
 
+      // Find all sections that should not be split
+      const sections = contentElement.querySelectorAll('[style*="breakInside"], [style*="pageBreakInside"], .space-y-6 > div');
+      
       // Create PDF
       const pdf = new jsPDF({
         orientation: 'portrait',
@@ -105,56 +81,119 @@ export const CVEditor = ({ cvData, onUpdate, fileName, onBack, cvId }: CVEditorP
         format: 'a4',
       });
 
-      const imgWidth = canvas.width;
-      const imgHeight = canvas.height;
+      const CONTENT_WIDTH_MM = A4_WIDTH_MM - (MARGIN_MM * 2);
       
-      // Scale to fit A4 width (accounting for html2canvas scale of 2)
-      const scaleFactor = CONTENT_WIDTH_MM / (imgWidth / 2);
-      const scaledTotalHeight = (imgHeight / 2) * scaleFactor;
-      
-      // If content fits on one page
-      if (scaledTotalHeight <= CONTENT_HEIGHT_MM) {
-        const imgData = canvas.toDataURL('image/jpeg', 0.92);
-        pdf.addImage(imgData, 'JPEG', MARGIN_MM, MARGIN_MM, CONTENT_WIDTH_MM, scaledTotalHeight);
-      } else {
-        // Multi-page: calculate page height in canvas pixels
-        const pageHeightPx = (CONTENT_HEIGHT_MM / scaleFactor) * 2;
-        const totalPages = Math.ceil(imgHeight / pageHeightPx);
+      if (sections.length > 0) {
+        // Smart page breaking: render sections individually
+        let currentPageY = 0;
+        let isFirstPage = true;
+        const scale = 2;
 
-        for (let page = 0; page < totalPages; page++) {
-          if (page > 0) {
+        for (let i = 0; i < sections.length; i++) {
+          const section = sections[i] as HTMLElement;
+          
+          // Capture this section
+          const sectionCanvas = await html2canvas(section, {
+            scale,
+            useCORS: true,
+            backgroundColor: null,
+            logging: false,
+          });
+
+          if (sectionCanvas.width === 0 || sectionCanvas.height === 0) continue;
+
+          // Calculate section height in mm
+          const sectionHeightPx = sectionCanvas.height / scale;
+          const sectionWidthPx = sectionCanvas.width / scale;
+          const scaleFactor = CONTENT_WIDTH_MM / sectionWidthPx;
+          const sectionHeightMM = sectionHeightPx * scaleFactor;
+
+          // Check if section fits on current page
+          const remainingSpace = CONTENT_HEIGHT_MM - currentPageY;
+          
+          if (sectionHeightMM > remainingSpace && currentPageY > 0) {
+            // Section won't fit, start new page
             pdf.addPage();
+            currentPageY = 0;
+            isFirstPage = false;
           }
 
-          const sourceY = page * pageHeightPx;
-          const sourceHeight = Math.min(pageHeightPx, imgHeight - sourceY);
-          
-          // Create a canvas for this page
-          const pageCanvas = document.createElement('canvas');
-          pageCanvas.width = imgWidth;
-          pageCanvas.height = sourceHeight;
-          
-          const ctx = pageCanvas.getContext('2d');
-          if (ctx) {
-            // Fill with white background
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
-            
-            // Draw the slice from the full canvas
-            ctx.drawImage(
-              canvas,
-              0, sourceY,           // Source x, y
-              imgWidth, sourceHeight, // Source width, height
-              0, 0,                 // Dest x, y
-              imgWidth, sourceHeight  // Dest width, height
-            );
-          }
+          // Add section image to PDF
+          const imgData = sectionCanvas.toDataURL('image/png');
+          pdf.addImage(
+            imgData, 
+            'PNG', 
+            MARGIN_MM, 
+            MARGIN_MM + currentPageY, 
+            CONTENT_WIDTH_MM, 
+            sectionHeightMM
+          );
 
-          const pageImgData = pageCanvas.toDataURL('image/jpeg', 0.92);
-          const pageScaledHeight = (sourceHeight / 2) * scaleFactor;
-          
-          pdf.addImage(pageImgData, 'JPEG', MARGIN_MM, MARGIN_MM, CONTENT_WIDTH_MM, pageScaledHeight);
+          currentPageY += sectionHeightMM + 2; // Add small gap between sections
         }
+      } else {
+        // Fallback: capture entire content and paginate
+        const canvas = await html2canvas(contentElement, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: '#ffffff',
+          logging: false,
+          onclone: (clonedDoc) => {
+            const clonedElement = clonedDoc.querySelector('.cv-preview-content') as HTMLElement;
+            if (clonedElement) {
+              clonedElement.style.display = 'block';
+              clonedElement.style.visibility = 'visible';
+              clonedElement.style.opacity = '1';
+              clonedElement.style.position = 'relative';
+            }
+          }
+        });
+
+        if (canvas.width === 0 || canvas.height === 0) {
+          toast.error("Failed to capture content");
+          setIsExportingPDF(false);
+          return;
+        }
+
+        const imgWidth = canvas.width;
+        const imgHeight = canvas.height;
+        const scaleFactor = CONTENT_WIDTH_MM / (imgWidth / 2);
+        const scaledTotalHeight = (imgHeight / 2) * scaleFactor;
+        
+        if (scaledTotalHeight <= CONTENT_HEIGHT_MM) {
+          const imgData = canvas.toDataURL('image/jpeg', 0.92);
+          pdf.addImage(imgData, 'JPEG', MARGIN_MM, MARGIN_MM, CONTENT_WIDTH_MM, scaledTotalHeight);
+        } else {
+          const pageHeightPx = (CONTENT_HEIGHT_MM / scaleFactor) * 2;
+          const totalPages = Math.ceil(imgHeight / pageHeightPx);
+
+          for (let page = 0; page < totalPages; page++) {
+            if (page > 0) pdf.addPage();
+
+            const sourceY = page * pageHeightPx;
+            const sourceHeight = Math.min(pageHeightPx, imgHeight - sourceY);
+            
+            const pageCanvas = document.createElement('canvas');
+            pageCanvas.width = imgWidth;
+            pageCanvas.height = sourceHeight;
+            
+            const ctx = pageCanvas.getContext('2d');
+            if (ctx) {
+              ctx.fillStyle = '#ffffff';
+              ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+              ctx.drawImage(canvas, 0, sourceY, imgWidth, sourceHeight, 0, 0, imgWidth, sourceHeight);
+            }
+
+            const pageImgData = pageCanvas.toDataURL('image/jpeg', 0.92);
+            const pageScaledHeight = (sourceHeight / 2) * scaleFactor;
+            pdf.addImage(pageImgData, 'JPEG', MARGIN_MM, MARGIN_MM, CONTENT_WIDTH_MM, pageScaledHeight);
+          }
+        }
+      }
+
+      // Restore parent
+      if (parentContainer && parentOriginalStyles) {
+        Object.assign(parentContainer.style, parentOriginalStyles);
       }
       
       pdf.save(`${fileName.replace(/\.[^/.]+$/, '')}_CV.pdf`);
