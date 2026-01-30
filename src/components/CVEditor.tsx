@@ -103,15 +103,36 @@ export const CVEditor = ({ cvData, onUpdate, fileName, onBack, cvId }: CVEditorP
         const imgData = canvas.toDataURL('image/png');
         pdf.addImage(imgData, 'PNG', MARGIN_MM, MARGIN_MM, CONTENT_WIDTH_MM, scaledHeightMM);
       } else {
-        // Multi-page: slice the canvas into pages
-        const pageHeightPx = (CONTENT_HEIGHT_MM / scaleFactor) * 2; // In canvas pixels (scaled)
-        const totalPages = Math.ceil(canvas.height / pageHeightPx);
+        // Multi-page: use overlap technique to prevent cutting content
+        const TOP_PADDING_MM = 10; // Extra padding at top of new pages
+        const FIRST_PAGE_CONTENT_HEIGHT_MM = CONTENT_HEIGHT_MM;
+        const SUBSEQUENT_PAGE_CONTENT_HEIGHT_MM = CONTENT_HEIGHT_MM - TOP_PADDING_MM;
+        
+        // Calculate pixel heights for each page type
+        const firstPageHeightPx = (FIRST_PAGE_CONTENT_HEIGHT_MM / scaleFactor) * 2;
+        const subsequentPageHeightPx = (SUBSEQUENT_PAGE_CONTENT_HEIGHT_MM / scaleFactor) * 2;
+        
+        // Calculate total pages needed
+        let remainingHeight = canvas.height;
+        let pageCount = 1;
+        remainingHeight -= firstPageHeightPx;
+        while (remainingHeight > 0) {
+          pageCount++;
+          remainingHeight -= subsequentPageHeightPx;
+        }
 
-        for (let page = 0; page < totalPages; page++) {
+        let currentY = 0;
+        
+        for (let page = 0; page < pageCount; page++) {
           if (page > 0) pdf.addPage();
 
-          const sourceY = page * pageHeightPx;
-          const sourceHeight = Math.min(pageHeightPx, canvas.height - sourceY);
+          const isFirstPage = page === 0;
+          const pageContentHeightPx = isFirstPage ? firstPageHeightPx : subsequentPageHeightPx;
+          const topMargin = isFirstPage ? MARGIN_MM : MARGIN_MM + TOP_PADDING_MM;
+          
+          const sourceHeight = Math.min(pageContentHeightPx, canvas.height - currentY);
+          
+          if (sourceHeight <= 0) break;
 
           // Create a canvas for this page
           const pageCanvas = document.createElement('canvas');
@@ -124,14 +145,16 @@ export const CVEditor = ({ cvData, onUpdate, fileName, onBack, cvId }: CVEditorP
             ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
             ctx.drawImage(
               canvas,
-              0, sourceY, canvas.width, sourceHeight,
+              0, currentY, canvas.width, sourceHeight,
               0, 0, canvas.width, sourceHeight
             );
           }
 
           const pageImgData = pageCanvas.toDataURL('image/png');
           const pageHeightMM = (sourceHeight / 2) * scaleFactor;
-          pdf.addImage(pageImgData, 'PNG', MARGIN_MM, MARGIN_MM, CONTENT_WIDTH_MM, pageHeightMM);
+          pdf.addImage(pageImgData, 'PNG', MARGIN_MM, topMargin, CONTENT_WIDTH_MM, pageHeightMM);
+          
+          currentY += sourceHeight;
         }
       }
       
