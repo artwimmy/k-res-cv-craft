@@ -61,23 +61,6 @@ export const CVEditor = ({ cvData, onUpdate, fileName, onBack, cvId }: CVEditorP
 
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      // Capture the full content at high resolution
-      const canvas = await html2canvas(contentElement, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-      });
-
-      // Restore styles
-      Object.assign(contentElement.style, originalStyles);
-
-      if (canvas.width === 0 || canvas.height === 0) {
-        toast.error("Failed to capture content");
-        setIsExportingPDF(false);
-        return;
-      }
-
       // A4 dimensions
       const A4_WIDTH_MM = 210;
       const A4_HEIGHT_MM = 297;
@@ -85,77 +68,79 @@ export const CVEditor = ({ cvData, onUpdate, fileName, onBack, cvId }: CVEditorP
       const CONTENT_WIDTH_MM = A4_WIDTH_MM - (MARGIN_MM * 2);
       const CONTENT_HEIGHT_MM = A4_HEIGHT_MM - (MARGIN_MM * 2);
 
-      // Calculate scaling
-      const imgWidthPx = canvas.width / 2; // Divide by scale
-      const imgHeightPx = canvas.height / 2;
-      const scaleFactor = CONTENT_WIDTH_MM / imgWidthPx;
-      const scaledHeightMM = imgHeightPx * scaleFactor;
+      // Find all sections that should not be broken
+      const mainContainer = contentElement.querySelector('.space-y-6') as HTMLElement;
+      const sections = mainContainer ? Array.from(mainContainer.children) as HTMLElement[] : [];
 
-      // Create PDF
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4',
-      });
-
-      if (scaledHeightMM <= CONTENT_HEIGHT_MM) {
-        // Fits on one page
+      if (sections.length === 0) {
+        // Fallback to simple capture if no sections found
+        const canvas = await html2canvas(contentElement, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: '#ffffff',
+          logging: false,
+        });
+        
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
         const imgData = canvas.toDataURL('image/png');
+        const imgWidthPx = canvas.width / 2;
+        const imgHeightPx = canvas.height / 2;
+        const scaleFactor = CONTENT_WIDTH_MM / imgWidthPx;
+        const scaledHeightMM = imgHeightPx * scaleFactor;
+        
         pdf.addImage(imgData, 'PNG', MARGIN_MM, MARGIN_MM, CONTENT_WIDTH_MM, scaledHeightMM);
-      } else {
-        // Multi-page: use overlap technique to prevent cutting content
-        const TOP_PADDING_MM = 10; // Extra padding at top of new pages
-        const FIRST_PAGE_CONTENT_HEIGHT_MM = CONTENT_HEIGHT_MM;
-        const SUBSEQUENT_PAGE_CONTENT_HEIGHT_MM = CONTENT_HEIGHT_MM - TOP_PADDING_MM;
+        pdf.save(`${fileName.replace(/\.[^/.]+$/, '')}_CV.pdf`);
+        toast.success("PDF exported successfully!");
+        Object.assign(contentElement.style, originalStyles);
+        setIsExportingPDF(false);
+        return;
+      }
+
+      // Capture each section individually
+      const sectionData: { canvas: HTMLCanvasElement; heightMM: number }[] = [];
+      
+      for (const section of sections) {
+        const sectionCanvas = await html2canvas(section, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: '#ffffff',
+          logging: false,
+        });
         
-        // Calculate pixel heights for each page type
-        const firstPageHeightPx = (FIRST_PAGE_CONTENT_HEIGHT_MM / scaleFactor) * 2;
-        const subsequentPageHeightPx = (SUBSEQUENT_PAGE_CONTENT_HEIGHT_MM / scaleFactor) * 2;
+        const sectionWidthPx = sectionCanvas.width / 2;
+        const sectionHeightPx = sectionCanvas.height / 2;
+        const scaleFactor = CONTENT_WIDTH_MM / sectionWidthPx;
+        const heightMM = sectionHeightPx * scaleFactor;
         
-        // Calculate total pages needed
-        let remainingHeight = canvas.height;
-        let pageCount = 1;
-        remainingHeight -= firstPageHeightPx;
-        while (remainingHeight > 0) {
-          pageCount++;
-          remainingHeight -= subsequentPageHeightPx;
+        sectionData.push({ canvas: sectionCanvas, heightMM });
+      }
+
+      // Restore styles
+      Object.assign(contentElement.style, originalStyles);
+
+      // Create PDF with smart page breaks
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      
+      let currentY = MARGIN_MM;
+      const SECTION_GAP_MM = 4; // Gap between sections
+      
+      for (let i = 0; i < sectionData.length; i++) {
+        const { canvas, heightMM } = sectionData[i];
+        
+        // Check if section fits on current page
+        const remainingSpace = A4_HEIGHT_MM - MARGIN_MM - currentY;
+        
+        if (heightMM > remainingSpace && currentY > MARGIN_MM) {
+          // Section doesn't fit, start new page
+          pdf.addPage();
+          currentY = MARGIN_MM;
         }
-
-        let currentY = 0;
         
-        for (let page = 0; page < pageCount; page++) {
-          if (page > 0) pdf.addPage();
-
-          const isFirstPage = page === 0;
-          const pageContentHeightPx = isFirstPage ? firstPageHeightPx : subsequentPageHeightPx;
-          const topMargin = isFirstPage ? MARGIN_MM : MARGIN_MM + TOP_PADDING_MM;
-          
-          const sourceHeight = Math.min(pageContentHeightPx, canvas.height - currentY);
-          
-          if (sourceHeight <= 0) break;
-
-          // Create a canvas for this page
-          const pageCanvas = document.createElement('canvas');
-          pageCanvas.width = canvas.width;
-          pageCanvas.height = sourceHeight;
-
-          const ctx = pageCanvas.getContext('2d');
-          if (ctx) {
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
-            ctx.drawImage(
-              canvas,
-              0, currentY, canvas.width, sourceHeight,
-              0, 0, canvas.width, sourceHeight
-            );
-          }
-
-          const pageImgData = pageCanvas.toDataURL('image/png');
-          const pageHeightMM = (sourceHeight / 2) * scaleFactor;
-          pdf.addImage(pageImgData, 'PNG', MARGIN_MM, topMargin, CONTENT_WIDTH_MM, pageHeightMM);
-          
-          currentY += sourceHeight;
-        }
+        // Add section to PDF
+        const imgData = canvas.toDataURL('image/png');
+        pdf.addImage(imgData, 'PNG', MARGIN_MM, currentY, CONTENT_WIDTH_MM, heightMM);
+        
+        currentY += heightMM + SECTION_GAP_MM;
       }
       
       pdf.save(`${fileName.replace(/\.[^/.]+$/, '')}_CV.pdf`);
