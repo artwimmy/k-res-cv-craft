@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -11,8 +11,7 @@ import { toast } from "sonner";
 import { useCVs } from "@/hooks/useCVs";
 import { useAppSettings } from "@/hooks/useAppSettings";
 import { generateWordDocument } from "@/lib/wordExport";
-import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
+import { generatePDFDocument } from "@/lib/pdfExport";
 
 interface CVEditorProps {
   cvData: CVData;
@@ -29,141 +28,16 @@ export const CVEditor = ({ cvData, onUpdate, fileName, onBack, cvId }: CVEditorP
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   const { saveCV, isSaving } = useCVs();
   const { logoUrl } = useAppSettings();
-  const previewRef = useRef<HTMLDivElement>(null);
 
   const handleExportPDF = async () => {
-    if (!previewRef.current) {
-      toast.error("Preview not available");
-      return;
-    }
-
     setIsExportingPDF(true);
     try {
       toast.info("Generating PDF...");
-      
-      const contentElement = previewRef.current.querySelector('.cv-preview-content') as HTMLElement;
-      if (!contentElement) {
-        toast.error("Preview content not found");
-        setIsExportingPDF(false);
-        return;
-      }
-
-      // Force visibility for capture
-      const originalStyles = {
-        position: contentElement.style.position,
-        visibility: contentElement.style.visibility,
-        display: contentElement.style.display,
-      };
-      
-      contentElement.style.position = 'relative';
-      contentElement.style.visibility = 'visible';
-      contentElement.style.display = 'block';
-
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      // A4 dimensions
-      const A4_WIDTH_MM = 210;
-      const A4_HEIGHT_MM = 297;
-      const MARGIN_MM = 15;
-      const BOTTOM_BUFFER_MM = 15; // Extra buffer at bottom so content never looks cut
-      const TOP_PADDING_MM = 10; // Extra padding at top of continuation pages
-      const CONTENT_WIDTH_MM = A4_WIDTH_MM - (MARGIN_MM * 2);
-      const MAX_Y = A4_HEIGHT_MM - MARGIN_MM - BOTTOM_BUFFER_MM; // Usable bottom limit
-
-      // Collect all atomic blocks that should never be split
-      const mainContainer = contentElement.querySelector('.space-y-6') as HTMLElement;
-      const topSections = mainContainer ? Array.from(mainContainer.children) as HTMLElement[] : [];
-
-      // Break large sections into smaller atomic blocks
-      const atomicBlocks: HTMLElement[] = [];
-      for (const section of topSections) {
-        // Check if this section has sub-items (e.g. experience entries, education entries)
-        const subItems = section.querySelectorAll('[style*="pageBreakInside"], [style*="breakInside"]');
-        if (subItems.length > 1) {
-          // Add the section heading separately, then each sub-item
-          // Find the heading (h2 element)
-          const heading = section.querySelector('h2');
-          if (heading) {
-            atomicBlocks.push(heading as HTMLElement);
-          }
-          subItems.forEach(item => atomicBlocks.push(item as HTMLElement));
-        } else {
-          atomicBlocks.push(section);
-        }
-      }
-
-      if (atomicBlocks.length === 0) {
-        // Fallback to simple capture if no sections found
-        const canvas = await html2canvas(contentElement, {
-          scale: 2,
-          useCORS: true,
-          backgroundColor: '#ffffff',
-          logging: false,
-        });
-        
-        const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-        const imgData = canvas.toDataURL('image/png');
-        const imgWidthPx = canvas.width / 2;
-        const imgHeightPx = canvas.height / 2;
-        const scaleFactor = CONTENT_WIDTH_MM / imgWidthPx;
-        const scaledHeightMM = imgHeightPx * scaleFactor;
-        
-        pdf.addImage(imgData, 'PNG', MARGIN_MM, MARGIN_MM, CONTENT_WIDTH_MM, scaledHeightMM);
-        pdf.save(`${fileName.replace(/\.[^/.]+$/, '')}_CV.pdf`);
-        toast.success("PDF exported successfully!");
-        Object.assign(contentElement.style, originalStyles);
-        setIsExportingPDF(false);
-        return;
-      }
-
-      // Capture each atomic block individually
-      const blockData: { canvas: HTMLCanvasElement; heightMM: number }[] = [];
-      
-      for (const block of atomicBlocks) {
-        const blockCanvas = await html2canvas(block, {
-          scale: 2,
-          useCORS: true,
-          backgroundColor: '#ffffff',
-          logging: false,
-        });
-        
-        const blockWidthPx = blockCanvas.width / 2;
-        const blockHeightPx = blockCanvas.height / 2;
-        const scaleFactor = CONTENT_WIDTH_MM / blockWidthPx;
-        const heightMM = blockHeightPx * scaleFactor;
-        
-        blockData.push({ canvas: blockCanvas, heightMM });
-      }
-
-      // Restore styles
-      Object.assign(contentElement.style, originalStyles);
-
-      // Create PDF with smart page breaks using generous margins
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-      
-      let currentY = MARGIN_MM;
-      const SECTION_GAP_MM = 3;
-      
-      for (let i = 0; i < blockData.length; i++) {
-        const { canvas, heightMM } = blockData[i];
-        
-        // Check if block fits within the safe zone of the current page
-        const fitsOnPage = (currentY + heightMM) <= MAX_Y;
-        
-        if (!fitsOnPage && currentY > MARGIN_MM) {
-          // Block doesn't fit in safe zone, start new page with top padding
-          pdf.addPage();
-          currentY = MARGIN_MM + TOP_PADDING_MM;
-        }
-        
-        // Add block to PDF
-        const imgData = canvas.toDataURL('image/png');
-        pdf.addImage(imgData, 'PNG', MARGIN_MM, currentY, CONTENT_WIDTH_MM, heightMM);
-        
-        currentY += heightMM + SECTION_GAP_MM;
-      }
-      
-      pdf.save(`${fileName.replace(/\.[^/.]+$/, '')}_CV.pdf`);
+      const pdf = await generatePDFDocument(cvData, {
+        anonymize,
+        logoUrl: logoUrl || undefined,
+      });
+      pdf.save(`${fileName.replace(/\.[^/.]+$/, '')}_CV${anonymize ? '_anon' : ''}.pdf`);
       toast.success("PDF exported successfully!");
     } catch (error) {
       console.error('Error generating PDF:', error);
@@ -323,7 +197,7 @@ export const CVEditor = ({ cvData, onUpdate, fileName, onBack, cvId }: CVEditorP
           className={`overflow-x-auto ${activeTab === 'form' ? 'lg:block absolute lg:relative -left-[9999px] lg:left-0' : ''}`}
           style={{ visibility: activeTab === 'form' ? 'hidden' : 'visible' }}
         >
-          <div ref={previewRef} className="min-w-fit lg:visible" style={{ visibility: 'visible' }}>
+          <div className="min-w-fit lg:visible" style={{ visibility: 'visible' }}>
             <CVPreview cvData={cvData} />
           </div>
         </div>
