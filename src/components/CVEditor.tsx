@@ -65,14 +65,34 @@ export const CVEditor = ({ cvData, onUpdate, fileName, onBack, cvId }: CVEditorP
       const A4_WIDTH_MM = 210;
       const A4_HEIGHT_MM = 297;
       const MARGIN_MM = 15;
+      const BOTTOM_BUFFER_MM = 15; // Extra buffer at bottom so content never looks cut
+      const TOP_PADDING_MM = 10; // Extra padding at top of continuation pages
       const CONTENT_WIDTH_MM = A4_WIDTH_MM - (MARGIN_MM * 2);
-      const CONTENT_HEIGHT_MM = A4_HEIGHT_MM - (MARGIN_MM * 2);
+      const MAX_Y = A4_HEIGHT_MM - MARGIN_MM - BOTTOM_BUFFER_MM; // Usable bottom limit
 
-      // Find all sections that should not be broken
+      // Collect all atomic blocks that should never be split
       const mainContainer = contentElement.querySelector('.space-y-6') as HTMLElement;
-      const sections = mainContainer ? Array.from(mainContainer.children) as HTMLElement[] : [];
+      const topSections = mainContainer ? Array.from(mainContainer.children) as HTMLElement[] : [];
 
-      if (sections.length === 0) {
+      // Break large sections into smaller atomic blocks
+      const atomicBlocks: HTMLElement[] = [];
+      for (const section of topSections) {
+        // Check if this section has sub-items (e.g. experience entries, education entries)
+        const subItems = section.querySelectorAll('[style*="pageBreakInside"], [style*="breakInside"]');
+        if (subItems.length > 1) {
+          // Add the section heading separately, then each sub-item
+          // Find the heading (h2 element)
+          const heading = section.querySelector('h2');
+          if (heading) {
+            atomicBlocks.push(heading as HTMLElement);
+          }
+          subItems.forEach(item => atomicBlocks.push(item as HTMLElement));
+        } else {
+          atomicBlocks.push(section);
+        }
+      }
+
+      if (atomicBlocks.length === 0) {
         // Fallback to simple capture if no sections found
         const canvas = await html2canvas(contentElement, {
           scale: 2,
@@ -96,47 +116,47 @@ export const CVEditor = ({ cvData, onUpdate, fileName, onBack, cvId }: CVEditorP
         return;
       }
 
-      // Capture each section individually
-      const sectionData: { canvas: HTMLCanvasElement; heightMM: number }[] = [];
+      // Capture each atomic block individually
+      const blockData: { canvas: HTMLCanvasElement; heightMM: number }[] = [];
       
-      for (const section of sections) {
-        const sectionCanvas = await html2canvas(section, {
+      for (const block of atomicBlocks) {
+        const blockCanvas = await html2canvas(block, {
           scale: 2,
           useCORS: true,
           backgroundColor: '#ffffff',
           logging: false,
         });
         
-        const sectionWidthPx = sectionCanvas.width / 2;
-        const sectionHeightPx = sectionCanvas.height / 2;
-        const scaleFactor = CONTENT_WIDTH_MM / sectionWidthPx;
-        const heightMM = sectionHeightPx * scaleFactor;
+        const blockWidthPx = blockCanvas.width / 2;
+        const blockHeightPx = blockCanvas.height / 2;
+        const scaleFactor = CONTENT_WIDTH_MM / blockWidthPx;
+        const heightMM = blockHeightPx * scaleFactor;
         
-        sectionData.push({ canvas: sectionCanvas, heightMM });
+        blockData.push({ canvas: blockCanvas, heightMM });
       }
 
       // Restore styles
       Object.assign(contentElement.style, originalStyles);
 
-      // Create PDF with smart page breaks
+      // Create PDF with smart page breaks using generous margins
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
       
       let currentY = MARGIN_MM;
-      const SECTION_GAP_MM = 4; // Gap between sections
+      const SECTION_GAP_MM = 3;
       
-      for (let i = 0; i < sectionData.length; i++) {
-        const { canvas, heightMM } = sectionData[i];
+      for (let i = 0; i < blockData.length; i++) {
+        const { canvas, heightMM } = blockData[i];
         
-        // Check if section fits on current page
-        const remainingSpace = A4_HEIGHT_MM - MARGIN_MM - currentY;
+        // Check if block fits within the safe zone of the current page
+        const fitsOnPage = (currentY + heightMM) <= MAX_Y;
         
-        if (heightMM > remainingSpace && currentY > MARGIN_MM) {
-          // Section doesn't fit, start new page
+        if (!fitsOnPage && currentY > MARGIN_MM) {
+          // Block doesn't fit in safe zone, start new page with top padding
           pdf.addPage();
-          currentY = MARGIN_MM;
+          currentY = MARGIN_MM + TOP_PADDING_MM;
         }
         
-        // Add section to PDF
+        // Add block to PDF
         const imgData = canvas.toDataURL('image/png');
         pdf.addImage(imgData, 'PNG', MARGIN_MM, currentY, CONTENT_WIDTH_MM, heightMM);
         
